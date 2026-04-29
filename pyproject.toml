@@ -1,0 +1,19 @@
+[project]
+name = "cp4d-installation-scripts"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cloud-pak-operations-cli>=0.13.0",
+    "ibm-watsonx-ai>=1.5.10",
+    "jinja2>=3.1.6",
+    "jsonpath-python>=1.1.5",
+    "marimo[mcp]>=0.23.4",
+    "pydantic-ai>=1.88.0",
+    "python-dotenv>=1.2.2",
+    "requests>=2.33.1",
+    "ruff>=0.15.12",
+    "transformers>=5.7.0",
+    "uv>=0.11.8",
+]

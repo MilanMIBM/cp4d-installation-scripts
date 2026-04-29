@@ -1,0 +1,11 @@
+uv
+ruff
+requests
+marimo[mcp]
+ibm-watsonx-ai
+jsonpath-python
+cloud-pak-operations-cli
+python-dotenv
+transformers
+pydantic-ai
+jinja2
