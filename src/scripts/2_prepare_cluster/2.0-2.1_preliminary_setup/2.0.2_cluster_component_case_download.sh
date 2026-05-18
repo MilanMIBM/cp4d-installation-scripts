@@ -11,6 +11,12 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../../source_env_setup.sh"
 
+
+PATCH_FLAG=()
+if [[ -n "${PATCH_ID}" ]]; then
+    PATCH_FLAG=(--patch_id=${PATCH_ID})
+fi
+
 # --- Case download for the components
 eval "${CPDM_OC_LOGIN}"
 
@@ -21,7 +27,7 @@ cpd-cli manage case-download \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --cluster_resources=true \
-    --patch_id=${PATCH_ID}
+    "${PATCH_FLAG[@]}"
 
 eval "${OC_LOGIN}"
 

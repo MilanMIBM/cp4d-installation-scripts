@@ -84,7 +84,7 @@ export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"{% endif %}
 # ------------------------------------------------------------------------------
 
 export VERSION="{{ cp4d_version_input.value }}"
-export PATCH_ID="latest"
+export PATCH_ID=""
 export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}"
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
