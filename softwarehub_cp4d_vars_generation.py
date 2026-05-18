@@ -184,7 +184,7 @@ def _():
     cpd_oc_login_cmd = (
         "cpd-cli manage login-to-ocp ${SERVER_ARGUMENTS} ${LOGIN_ARGUMENTS}"
     )
-    return (oc_login_cmd, cpd_oc_login_cmd)
+    return
 
 
 @app.cell
@@ -518,7 +518,8 @@ def _(install_component_table_1, install_component_table_2):
 def _(install_component_table_1, install_component_table_2):
     components_to_install = [
         item["component_id"]
-        for item in install_component_table_1.value + install_component_table_2.value
+        for item in install_component_table_1.value
+        + install_component_table_2.value
     ]
     print(components_to_install)
     components_to_install_str = ",".join(components_to_install)
@@ -639,7 +640,7 @@ def _(widget_labels):
     )
 
     # licenses_are_prod_checkbox
-    return (licenses_are_prod_checkbox,)
+    return
 
 
 @app.cell
@@ -649,7 +650,7 @@ def _(widget_labels):
     )
 
     # updating_components_checkbox
-    return (updating_components_checkbox,)
+    return
 
 
 @app.cell
@@ -661,7 +662,7 @@ def _(widget_labels):
     )
 
     # cp4d_version_input
-    return (cp4d_version_input,)
+    return
 
 
 @app.cell
@@ -826,7 +827,7 @@ def _(cpd_vars_filename, cpd_vars_template_editor):
         data=cpd_vars_template_editor.value.encode("utf-8"),
         filename=cpd_vars_filename,
         mimetype="application/x-sh",
-        label="**Save your cpd-vars.sh config file**",
+        label="**Save your cpd-vars.sh file**",
     )
     return (save_config_cpd,)
 
@@ -889,7 +890,7 @@ def _(
         data=inst_options_template_editor.value.encode("utf-8"),
         filename=inst_options_filename,
         mimetype="application/x-yml",
-        label="**Save your install-options.yml config file**",
+        label="**Save your install-options.yml file**",
         disabled=(not install_options_addon.value),
     )
     return (save_config_inst_options,)

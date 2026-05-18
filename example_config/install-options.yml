@@ -1,0 +1,98 @@
+################################################################################
+# IBM Software Hub install-options.yml
+# Generated based on selected components
+################################################################################
+
+---
+# ............................................................................
+# Analytics Engine powered by Apache Spark parameters
+# ............................................................................
+non_olm:
+  analyticsengine:
+
+# ------------------------------------------------------------------------------
+# Analytics Engine powered by Apache Spark service configuration parameters
+# ------------------------------------------------------------------------------
+    serviceConfig:
+      sparkAdvEnabled: true
+      jobAutoDeleteEnabled: true
+      kernelCullTime: 30
+      imagePullParallelism: "20"
+      imagePullCompletions: "10"
+      kernelCleanupSchedule: "*/30 * * * *"
+      jobCleanupSchedule: "*/30 * * * *"
+      skipSelinuxRelabeling: false
+      mountCustomizationsFromCchome: false
+
+# ------------------------------------------------------------------------------
+# Spark runtime configuration parameters
+# ------------------------------------------------------------------------------
+    sparkRuntimeConfig:
+      maxDriverCpuCores: 2
+      maxExecutorCpuCores: 3
+      maxDriveMemory: "10g"
+      maxExecutorMemory: "20g"
+      maxNumWorkers: 20
+      localDirScaleFactor: 10
+
+---
+# ............................................................................
+# Informix parameters
+# Valid licenseType values:
+#   AEE - Specify this option if you purchased Advanced Enterprise Edition.
+#   EE - Specify this option if you purchased Enterprise Edition.
+#   WE - Specify this option if you purchased Workgroup Edition.
+# ............................................................................
+non_olm:
+  ibmInformixCp4dOperator:
+    licenseType: AEE
+
+---
+# ............................................................................
+# Orchestration Pipelines parameters
+# Valid rbsimage values: rbs-ext (includes OpenSSH + Db2), run-bash-script (without)
+# ............................................................................
+non_olm:
+  wsPipelines:
+    rbsimage: rbs-ext
+
+---
+# ............................................................................
+# watsonx.ai parameters
+# ............................................................................
+non_olm:
+  watsonxAi:
+    liteInstall: false # Lightweight engine only
+    tuning_disabled: true # Tuning studio is disabled by default, set to false to enable it.
+
+---
+# ............................................................................
+# watsonx.data parameters 
+# Valid scaleConfig values: small, medium, large
+# ............................................................................
+non_olm:
+  watsonxData:
+    enable_lite_milvus: false
+    scaleConfig: small
+
+---
+# ............................................................................
+# watsonx.governance parameters 
+# installType Valid values:
+#   all - Specify this option if you purchased both Model Management and Risk and Compliance Foundation entitlement.
+#   mm - Specify this option if you purchased Model Management entitlement.
+#   rcf - Specify this option if you purchased Risk and Compliance Foundation entitlement.
+# ............................................................................
+non_olm:
+  watsonxGovernance:
+    installType: all
+    enableFactsheet: true
+    enableOpenscale: true
+    enableOpenpages: true
+#   openpagesInstanceCR: "op-wxgov-instance"
+#   openPages:
+#     databaseType: internal
+#     database: Db2
+#     dbSecretName: <secret-name>
+
+

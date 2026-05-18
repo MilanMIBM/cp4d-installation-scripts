@@ -111,20 +111,9 @@ export LICENSE_ENTITLEMENTS="{{ entitlements_to_apply_str }}"
 # Product Specific SCC requirements
 # ------------------------------------------------------------------------------
 
-{% if components_to_install_str.split(',') | select('in', ['db2oltp', 'db2wh', 'db2aaservice', 'openpages', 'watsonx_governance']) | list %}
-export PREP_DB2="true"{% endif %}
-
-{% if 'ibm_wxd_opensearch' in components_to_install_str.split(',') %}
-export PREP_OPENSEARCH="true"{% endif %}
-
-{% if 'informix' in components_to_install_str.split(',') or 'informix_cp4d' in components_to_install_str.split(',') %}
-export PREP_INFORMIX="true"{% endif %}
-
-{% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') %}
-export PREP_DATASTAX="true"{% endif %}
-
-{% if 'planning_analytics' in components_to_install_str.split(',') %}
-export PREP_PA="true"{% endif %}
-
-{% if 'cognos_analytics' in components_to_install_str.split(',') %}
-export PREP_CA="true"{% endif %}
+{% if components_to_install_str.split(',') | select('in', ['db2oltp', 'db2wh', 'db2aaservice', 'openpages', 'watsonx_governance']) | list %}export PREP_DB2="true"{% endif %}
+{% if 'ibm_wxd_opensearch' in components_to_install_str.split(',') %}export PREP_OPENSEARCH="true"{% endif %}
+{% if 'informix' in components_to_install_str.split(',') or 'informix_cp4d' in components_to_install_str.split(',') %}export PREP_INFORMIX="true"{% endif %}
+{% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') %}export PREP_DATASTAX="true"{% endif %}
+{% if 'planning_analytics' in components_to_install_str.split(',') %}export PREP_PA="true"{% endif %}
+{% if 'cognos_analytics' in components_to_install_str.split(',') %}export PREP_CA="true"{% endif %}

@@ -238,3 +238,4 @@ src/scripts/5_component_specific_scripts/5_inst_wxd_opensearch.sh
 cpd_vars_template.sh
 cp4d_installer_mnb.py
 src/helpers/cp4d_setup_commands.py
+*.env
