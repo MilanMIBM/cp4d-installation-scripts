@@ -235,3 +235,6 @@ src/helpers/cpd_variable_template.sh
 /src/scripts/_0ld_version
 src/scripts/5_component_specific_scripts/5_inst_wxd_opensearch.sh
 /old_cp4d_configs
+cpd_vars_template.sh
+cp4d_installer_mnb.py
+src/helpers/cp4d_setup_commands.py
