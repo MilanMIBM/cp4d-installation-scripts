@@ -217,3 +217,21 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 cpd-file.txt
+/cp4d_config/*
+/cpd-cli-workspace
+cpdaddons.yml
+db2-tls.crt
+edb-tls.crt
+s_env.sh
+src/helpers/cpd_variable_template\[backup\].sh.j2
+planning-analytics-instance.json
+old_cp4d_configs/cpd_vars.sh
+*.dockerconfigjson
+informix-instance.json
+install-options-non-olm.yml
+./cpd_vars_template.sh
+src/helpers/cpd_variable_template.sh
+.DS_Store
+/src/scripts/_0ld_version
+src/scripts/5_component_specific_scripts/5_inst_wxd_opensearch.sh
+/old_cp4d_configs

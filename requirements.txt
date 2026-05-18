@@ -3,9 +3,13 @@ ruff
 requests
 marimo[mcp]
 ibm-watsonx-ai
+wigglystuff
 jsonpath-python
 cloud-pak-operations-cli
 python-dotenv
 transformers
 pydantic-ai
 jinja2
+mohtml
+moterm
+click
