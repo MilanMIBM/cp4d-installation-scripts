@@ -32,6 +32,16 @@ if [[ -f "${CPD_CLI_WORK_PATH}/{INSTALL_OPTIONS_FILE}" ]]; then
     PARAM_FILE_FLAG=(--param-file=${CPD_CLI_WORK_PATH_CONTAINER}/{INSTALL_OPTIONS_FILE})
 fi
 
+SKIP_COMPONENTS_FLAG=()
+if [[ -n "${COMPONENTS_TO_SKIP:-}" ]]; then
+    SKIP_COMPONENTS_FLAG=(--skip_components=${COMPONENTS_TO_SKIP})
+fi
+
+PATCH_FLAG=()
+if [[ -n "${PATCH_ID}" ]]; then
+    PATCH_FLAG=(--patch_id=${PATCH_ID})
+fi
+
 # Install remaining instance-scoped components (e.g. cpfs, cpd_platform)
 if (( ${#INSTANCE_COMPONENTS[@]} > 0 )); then
     for var in STG_CLASS_BLOCK STG_CLASS_FILE IMAGE_PULL_PREFIX IMAGE_PULL_SECRET; do
@@ -53,5 +63,7 @@ if (( ${#INSTANCE_COMPONENTS[@]} > 0 )); then
         --image_pull_prefix=${IMAGE_PULL_PREFIX} \
         --image_pull_secret=${IMAGE_PULL_SECRET} \
         "${PARAM_FILE_FLAG[@]}" \
-        --run_storage_tests=false
+        "${SKIP_COMPONENTS_FLAG[@]}" \
+        --upgrade=${UPDATE} \
+        "${PATCH_FLAG[@]}"
 fi

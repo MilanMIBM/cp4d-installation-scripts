@@ -20,6 +20,8 @@ done
 
 PROD_APPLICABLE=(
     "cpd-enterprise"
+    "cognos-analytics"
+    "planning-analytics"
     "data-lineage"
     "data-lineage-reserved"
     "data-integration-unstructured-data"

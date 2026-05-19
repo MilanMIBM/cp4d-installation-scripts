@@ -13,12 +13,13 @@ non_olm:
 # ------------------------------------------------------------------------------
 # Analytics Engine powered by Apache Spark service configuration parameters
 # ------------------------------------------------------------------------------
+# This preset is meant to not over-commit nodes on the cluster which is very easy with larger configs of analyticsengine.
     serviceConfig:
       sparkAdvEnabled: true
       jobAutoDeleteEnabled: true
       kernelCullTime: 30
-      imagePullParallelism: "20"
-      imagePullCompletions: "10"
+      imagePullParallelism: "10"
+      imagePullCompletions: "6"
       kernelCleanupSchedule: "*/30 * * * *"
       jobCleanupSchedule: "*/30 * * * *"
       skipSelinuxRelabeling: false
@@ -30,10 +31,10 @@ non_olm:
     sparkRuntimeConfig:
       maxDriverCpuCores: 2
       maxExecutorCpuCores: 3
-      maxDriveMemory: "10g"
-      maxExecutorMemory: "20g"
-      maxNumWorkers: 20
-      localDirScaleFactor: 10
+      maxDriveMemory: "2g"
+      maxExecutorMemory: "4g"
+      maxNumWorkers: 6
+      localDirScaleFactor: 5
 {% endif %}{% if "replication" in components_to_install %}
 ---
 # ............................................................................

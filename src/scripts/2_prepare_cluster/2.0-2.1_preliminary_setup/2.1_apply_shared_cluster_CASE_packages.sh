@@ -11,6 +11,17 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../../source_env_setup.sh"
 
+
+PATCH_FLAG=()
+if [[ -n "${PATCH_ID}" ]]; then
+    PATCH_FLAG=(--patch_id=${PATCH_ID})
+fi
+
+PARAM_FILE_FLAG=()
+if [[ -f "${CPD_CLI_WORK_PATH}/{INSTALL_OPTIONS_FILE}" ]]; then
+    PARAM_FILE_FLAG=(--param-file=${CPD_CLI_WORK_PATH_CONTAINER}/{INSTALL_OPTIONS_FILE})
+fi
+
 # ---
 eval "${CPDM_OC_LOGIN}"
 
@@ -39,7 +50,10 @@ if [[ "${HAS_LICENSING}" == true ]]; then
     cpd-cli manage apply-cluster-components \
         --release=${VERSION} \
         --license_acceptance=true \
-        --licensing_ns=${PROJECT_LICENSE_SERVICE} 
+        --licensing_ns=${PROJECT_LICENSE_SERVICE} \
+        --case_download=true \
+        "${PATCH_FLAG[@]}"
+
 fi
 
 # Apply the scheduling service if scheduler is listed
@@ -50,5 +64,8 @@ if [[ "${HAS_SCHEDULER}" == true ]]; then
         --license_acceptance=true \
         --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
         --image_pull_prefix=${IMAGE_PULL_PREFIX} \
-        --image_pull_secret=${IMAGE_PULL_SECRET} 
+        --image_pull_secret=${IMAGE_PULL_SECRET} \
+        --case_download=true \
+        "${PARAM_FILE_FLAG[@]}" \
+        "${PATCH_FLAG[@]}"
 fi
