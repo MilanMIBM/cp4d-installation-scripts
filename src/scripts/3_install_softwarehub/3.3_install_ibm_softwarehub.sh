@@ -27,19 +27,19 @@ for _c in "${_all_components[@]}"; do
     esac
 done
 
-PARAM_FILE_FLAG=()
-if [[ -f "${CPD_CLI_WORK_PATH}/{INSTALL_OPTIONS_FILE}" ]]; then
-    PARAM_FILE_FLAG=(--param-file=${CPD_CLI_WORK_PATH_CONTAINER}/{INSTALL_OPTIONS_FILE})
-fi
-
 SKIP_COMPONENTS_FLAG=()
 if [[ -n "${COMPONENTS_TO_SKIP:-}" ]]; then
-    SKIP_COMPONENTS_FLAG=(--skip_components=${COMPONENTS_TO_SKIP})
+    SKIP_COMPONENTS_FLAG=(--skip_components="${COMPONENTS_TO_SKIP}")
+fi
+
+PARAM_FILE_FLAG=()
+if [[ -n "${INSTALL_OPTIONS}" ]]; then
+    PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
 fi
 
 PATCH_FLAG=()
 if [[ -n "${PATCH_ID}" ]]; then
-    PATCH_FLAG=(--patch_id=${PATCH_ID})
+    PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
 # Install remaining instance-scoped components (e.g. cpfs, cpd_platform)

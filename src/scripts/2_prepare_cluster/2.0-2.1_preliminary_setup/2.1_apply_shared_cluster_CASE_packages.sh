@@ -11,15 +11,14 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../../source_env_setup.sh"
 
+PARAM_FILE_FLAG=()
+if [[ -n "${INSTALL_OPTIONS}" ]]; then
+    PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
+fi
 
 PATCH_FLAG=()
 if [[ -n "${PATCH_ID}" ]]; then
-    PATCH_FLAG=(--patch_id=${PATCH_ID})
-fi
-
-PARAM_FILE_FLAG=()
-if [[ -f "${CPD_CLI_WORK_PATH}/{INSTALL_OPTIONS_FILE}" ]]; then
-    PARAM_FILE_FLAG=(--param-file=${CPD_CLI_WORK_PATH_CONTAINER}/{INSTALL_OPTIONS_FILE})
+    PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
 # ---
