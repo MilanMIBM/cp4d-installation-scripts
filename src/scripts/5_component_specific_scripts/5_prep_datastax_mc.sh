@@ -21,6 +21,10 @@ done
 
 eval "${OC_LOGIN}"
 
+#--------------------------------
+##### Datastax uses block storage
+#--------------------------------
+
 # --- prepares prepares nonroot-v2 security context to the service
 oc adm policy add-scc-to-user nonroot-v2 -z datastax-mc -n ${PROJECT_CPD_INST_OPERANDS}
 # --- extracts DataStax Mission Control login credentials
@@ -45,10 +49,16 @@ eval "${PREP_DATASTAX_ROUTE}"
 
 # eval "${PREP_DATASTAX_ANNOTATION}" VVV same as below
 
-oc label ns ${PROJECT_CPD_INST_OPERATORS}  mission-control.datastax.com/is-project=true
-oc annotate ns ${PROJECT_CPD_INST_OPERATORS}  mission-control.datastax.com/project-name=${PROJECT_CPD_INST_OPERATORS}
-oc label ns ${PROJECT_CPD_INST_OPERANDS}  mission-control.datastax.com/is-project=true
-oc annotate ns ${PROJECT_CPD_INST_OPERANDS}  mission-control.datastax.com/project-name=${PROJECT_CPD_INST_OPERANDS}
+for _NS in "${PROJECT_CPD_INST_OPERATORS}" "${PROJECT_CPD_INST_OPERANDS}"; do
+    _CURRENT_LABEL="$(oc get ns "${_NS}" -o jsonpath='{.metadata.labels.mission-control\.datastax\.com/is-project}' 2>/dev/null || true)"
+    if [[ "${_CURRENT_LABEL}" != "true" ]]; then
+        oc label ns "${_NS}" mission-control.datastax.com/is-project=true
+    fi
+    _CURRENT_ANNOTATION="$(oc get ns "${_NS}" -o jsonpath='{.metadata.annotations.mission-control\.datastax\.com/project-name}' 2>/dev/null || true)"
+    if [[ "${_CURRENT_ANNOTATION}" != "${_NS}" ]]; then
+        oc annotate ns "${_NS}" mission-control.datastax.com/project-name="${_NS}"
+    fi
+done
 
 # Discover all CassandraDatacenter instance names in the operands namespace
 DC_NAMES=($(oc get cassandradatacenters.cassandra.datastax.com -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.items[*].metadata.name}'))
@@ -67,7 +77,11 @@ for DC_NAME in "${DC_NAMES[@]}"; do
     COMMON_ANNOTATIONS=$(eval "${PREP_COMMON_DC_ANNOTATIONS}")
     echo ${COMMON_ANNOTATIONS}
 
-    PREP_DATASTAX_API="cat <<EOF | oc apply -f -
+    DATAAPI_READY="$(oc get dataapi.missioncontrol.datastax.com "${DC_NAME}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+    if [[ "${DATAAPI_READY}" == "True" ]]; then
+        echo "[INFO] DataApi '${DC_NAME}' already exists and is Ready - skipping creation."
+    else
+        PREP_DATASTAX_API="cat <<EOF | oc apply -f -
 {
     \"apiVersion\": \"missioncontrol.datastax.com/v1alpha1\",
     \"kind\": \"DataApi\",
@@ -91,14 +105,14 @@ for DC_NAME in "${DC_NAMES[@]}"; do
         \"replicas\": 1,
         \"resources\": {
             \"limits\": {
-                \"cpu\": 1,
-                \"memory\": \"1G\",
-                \"ephemeral-storage\": \"500Mi\"
+                \"cpu\": 4,
+                \"memory\": \"8G\",
+                \"ephemeral-storage\": \"4Gi\"
             },
             \"requests\": {
-                \"cpu\": 1,
-                \"memory\": \"1G\",
-                \"ephemeral-storage\": \"500Mi\"
+                \"cpu\": 2,
+                \"memory\": \"4G\",
+                \"ephemeral-storage\": \"2Gi\"
             }
         },
         \"services\": {
@@ -109,10 +123,81 @@ for DC_NAME in "${DC_NAMES[@]}"; do
     }
 }
 EOF"
-    eval "${PREP_DATASTAX_API}"
+        eval "${PREP_DATASTAX_API}"
+    fi
     DCNAME_SUPERUSER=$(eval "oc extract secret/datastax${DC_NAME//[^0-9]/}-superuser -n ${PROJECT_CPD_INST_OPERANDS}  --to=-")
     echo ${DCNAME_SUPERUSER}
 done
 
 
 oc get cassandradatacenters.cassandra.datastax.com -n "${PROJECT_CPD_INST_OPERANDS}"
+
+# --- write DataStax MC credentials to cpd_instance_details.sh ---
+REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
+VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
+
+DATASTAX_URL="https://$(oc get route datastax-mc-ui -n ${PROJECT_CPD_INST_OPERATORS} -o jsonpath='{.spec.host}')"
+
+_UI_SECRET="datastax-mc-embedded-ui-dex-admin-credentials"
+DATASTAX_USERNAME="" DATASTAX_PASSWORD=""
+for (( _attempt=1; _attempt<=5; _attempt++ )); do
+    DATASTAX_USERNAME="$(oc get secret "${_UI_SECRET}" -n "${PROJECT_CPD_INST_OPERATORS}" -o jsonpath='{.data.username}' 2>/dev/null | base64 --decode || true)"
+    DATASTAX_PASSWORD="$(oc get secret "${_UI_SECRET}" -n "${PROJECT_CPD_INST_OPERATORS}" -o jsonpath='{.data.password}' 2>/dev/null | base64 --decode || true)"
+    [[ -n "${DATASTAX_USERNAME}" && -n "${DATASTAX_PASSWORD}" ]] && break
+    _delay=$(( _attempt * 10 ))
+    echo "[WARN] Secret '${_UI_SECRET}' is missing username/password, retrying in ${_delay}s (attempt ${_attempt}/5)..." >&2
+    sleep "${_delay}"
+done
+[[ -z "${DATASTAX_USERNAME}" || -z "${DATASTAX_PASSWORD}" ]] && echo "[WARN] Secret '${_UI_SECRET}' could not be fully retrieved after 5 retries." >&2
+
+_SUPERUSER_SECRET="datastax${DC_NAMES[1]//[^0-9]/}-superuser"
+DATASTAX_HCD_API_USER="" DATASTAX_HCD_API_PASSWORD=""
+for (( _attempt=1; _attempt<=5; _attempt++ )); do
+    DATASTAX_HCD_API_USER="$(oc get secret "${_SUPERUSER_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.username}' 2>/dev/null | base64 --decode || true)"
+    DATASTAX_HCD_API_PASSWORD="$(oc get secret "${_SUPERUSER_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.password}' 2>/dev/null | base64 --decode || true)"
+    [[ -n "${DATASTAX_HCD_API_USER}" && -n "${DATASTAX_HCD_API_PASSWORD}" ]] && break
+    _delay=$(( _attempt * 10 ))
+    echo "[WARN] Secret '${_SUPERUSER_SECRET}' is missing username/password, retrying in ${_delay}s (attempt ${_attempt}/5)..." >&2
+    sleep "${_delay}"
+done
+[[ -z "${DATASTAX_HCD_API_USER}" || -z "${DATASTAX_HCD_API_PASSWORD}" ]] && echo "[WARN] Secret '${_SUPERUSER_SECRET}' could not be fully retrieved after 5 retries." >&2
+
+# Derive the DataApi URL from the primary DC - expose via OCP Route for external access
+_PRIMARY_DC="${DC_NAMES[1]}"
+DATASTAX_HCD_PORT="$(oc get dataapi.missioncontrol.datastax.com "${_PRIMARY_DC}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.spec.services.clusterIP.port}' 2>/dev/null || echo "8080")"
+
+# Derive the DataApi clusterIP service name: <dc>-data-api-cip
+DATASTAX_HCD_SVC="${_PRIMARY_DC}-data-api-cip"
+
+_DATAAPI_ROUTE_NAME="${_PRIMARY_DC}-dataapi"
+_DATAAPI_ROUTE_EXISTS="$(oc get route "${_DATAAPI_ROUTE_NAME}" -n "${PROJECT_CPD_INST_OPERANDS}" --ignore-not-found -o jsonpath='{.metadata.name}' 2>/dev/null || true)"
+if [[ -z "${_DATAAPI_ROUTE_EXISTS}" ]]; then
+    oc create route edge "${_DATAAPI_ROUTE_NAME}" \
+        --service="${DATASTAX_HCD_SVC}" \
+        --port=http \
+        --insecure-policy=Redirect \
+        -n "${PROJECT_CPD_INST_OPERANDS}"
+fi
+DATASTAX_HCD_URL="https://$(oc get route "${_DATAAPI_ROUTE_NAME}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.spec.host}')"
+
+DATASTAX_BLOCK="
+# Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#--- DataStax Mission Control - DataAPI
+export DATASTAX_MC_URL=\"${DATASTAX_URL}\"
+export DATASTAX_MC_USERNAME=\"${DATASTAX_USERNAME}\"
+export DATASTAX_MC_LOGIN_USERNAME=\"${DATASTAX_USERNAME}@local\"
+export DATASTAX_MC_PASSWORD=\"${DATASTAX_PASSWORD}\"
+#--- DataStax HyperConvergedDatabase (HCD) - DataAPI
+export DATASTAX_HCD_ENDPOINT=\"${DATASTAX_HCD_URL}\"
+export DATASTAX_HCD_API_USER=\"${DATASTAX_HCD_API_USER}\"
+export DATASTAX_HCD_API_PASSWORD=\"${DATASTAX_HCD_API_PASSWORD}\"
+export DATASTAX_HCD_KEYSPACE=\"default_keyspace\""
+
+if [[ -f "${VARS_FILE}" ]]; then
+    echo "${DATASTAX_BLOCK}" >> "${VARS_FILE}"
+    echo "[INFO] DataStax MC credentials appended to ${VARS_FILE##*/}"
+else
+    mkdir -p "$(dirname "${VARS_FILE}")"
+    echo "${DATASTAX_BLOCK}" > "${VARS_FILE}"
+    echo "[INFO] DataStax MC credentials written to ${VARS_FILE##*/}"
+fi

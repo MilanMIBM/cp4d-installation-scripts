@@ -30,7 +30,7 @@ rm -f "/tmp/${PACKAGE_NAME}"
 
 # Trust components via xattr (removes quarantine flag, no manual right-click needed)
 echo "[3/4] Removing macOS quarantine flags..."
-COMPONENTS=(
+CPD_COMPONENTS=(
   "cpd-cli"
   "plugins/lib/darwin/config"
   "plugins/lib/darwin/cpdbr"
@@ -42,7 +42,7 @@ COMPONENTS=(
   "plugins/lib/darwin/platform-diag"
   "plugins/lib/darwin/platform-mgmt"
 )
-for component in "${COMPONENTS[@]}"; do
+for component in "${CPD_COMPONENTS[@]}"; do
   target="${INSTALL_DIR}/${component}"
   if [[ -f "${target}" ]]; then
     xattr -rd com.apple.quarantine "${target}" 2>/dev/null || true

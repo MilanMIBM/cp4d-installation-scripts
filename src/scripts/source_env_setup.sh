@@ -5,7 +5,8 @@
 _CP4D_ENV_LOADED=1
 
 _ENV_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-CONFIG_DIR="${_ENV_SETUP_DIR}/../../cp4d_config"
+export CONFIG_DIR="${_ENV_SETUP_DIR}/../../cp4d_config"
+export SERVICE_INSTANCE_FILE_DIR="${_ENV_SETUP_DIR}/../../service_instances"
 unset _ENV_SETUP_DIR
 
 _sourced=()
@@ -29,5 +30,14 @@ unset -f _source_if_exists
 export CPD_CLI_MANAGE_WORKSPACE="$HOME/cpd-cli"
 export PATH="$HOME/cpd-cli:$PATH"
 export CPD_CLI_WORK_PATH="$HOME/cpd-cli/work"
-# The container mounts CPD_CLI_WORK_PATH at /tmp/work; use this for --param-file flags
 export CPD_CLI_WORK_PATH_CONTAINER="/tmp/work"
+export CPD_CONFIG_PATH_CONTAINER="/cp4d_config"
+
+# Copy cp4d_config files into the work directory so the container can read them at /tmp/work/cp4d_config/
+_CONFIG_WORK_DIR="${CPD_CLI_WORK_PATH}/cp4d_config"
+mkdir -p "${_CONFIG_WORK_DIR}"
+cp "${CONFIG_DIR}/"* "${_CONFIG_WORK_DIR}/" 2>/dev/null || true
+unset _CONFIG_WORK_DIR
+
+# Override CPD_CONFIG_PATH_CONTAINER to point at the copied location inside the container
+export CPD_CONFIG_PATH_CONTAINER="/tmp/work/cp4d_config"

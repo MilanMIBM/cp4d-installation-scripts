@@ -20,7 +20,7 @@ CPD_INSTANCE_DETAILS="$(cpd-cli manage get-cpd-instance-details \
 
 echo "${CPD_INSTANCE_DETAILS}"
 
-CPD_URL="$(echo "${CPD_INSTANCE_DETAILS}"       | grep 'CPD Url:'      | grep -oE '[^ ]+$' | tr -d '[:space:]')"
+CPD_URL="https://$(echo "${CPD_INSTANCE_DETAILS}" | grep 'CPD Url:'      | grep -oE '[^ ]+$' | tr -d '[:space:]')"
 CPD_USERNAME="$(echo "${CPD_INSTANCE_DETAILS}"  | grep 'CPD Username:' | grep -oE '[^ ]+$' | tr -d '[:space:]')"
 CPD_PASSWORD="$(echo "${CPD_INSTANCE_DETAILS}"  | grep 'CPD Password:' | grep -oE '[^ ]+$' | tr -d '[:space:]')"
 
@@ -29,9 +29,34 @@ VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
 
 cat > "${VARS_FILE}" <<EOF
 # Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-export CPD_URL="https://${CPD_URL}"
+export CPD_URL="${CPD_URL}"
 export CPD_USERNAME="${CPD_USERNAME}"
 export CPD_PASSWORD="${CPD_PASSWORD}"
 EOF
 
-echo "[INFO] CPD instance credentials written to $(basename ${VARS_FILE})"
+echo "[INFO] Generating CPD bearer token..."
+CPD_BEARER_TOKEN="$(curl -k -s -X POST \
+  "${CPD_URL}/icp4d-api/v1/authorize" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"${CPD_USERNAME}\",\"password\":\"${CPD_PASSWORD}\"}" \
+  | tr ',' '\n' | grep '"token"' | grep -oE '"token":"[^"]+"' | cut -d'"' -f4 || true)"
+
+if [[ -z "${CPD_BEARER_TOKEN}" ]]; then
+  echo "[ERROR] Failed to retrieve CPD bearer token" >&2
+  exit 1
+fi
+
+echo "[INFO] Generating CPD API key..."
+CPD_APIKEY="$(curl -k -s -X GET \
+  "${CPD_URL}/usermgmt/v1/user/apiKey" \
+  -H "Authorization: Bearer ${CPD_BEARER_TOKEN}" \
+  | tr ',' '\n' | grep '"apiKey"' | grep -oE '"apiKey":"[^"]+"' | cut -d'"' -f4 || true)"
+
+if [[ -z "${CPD_APIKEY}" ]]; then
+  echo "[ERROR] Failed to retrieve CPD API key" >&2
+  exit 1
+fi
+
+echo "export CPD_APIKEY=\"${CPD_APIKEY}\"" >> "${VARS_FILE}"
+
+echo "[INFO] CPD instance credentials written to ${VARS_FILE##*/}"

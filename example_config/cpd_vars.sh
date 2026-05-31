@@ -77,8 +77,8 @@ export CPD_ADMIN_USERNAME="kubeadmin"
 # ------------------------------------------------------------------------------
 
 export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform"
-export COMPONENTS="analyticsengine,db2oltp,db2wh,dv,informix_cp4d,mongodb_cp4d,planning_analytics,productmaster,watsonx_ai,watsonx_data,watsonx_governance,ws_pipelines,datastax_mc"
-export CPD_COMPONENTS="${SOFTWARE_HUB},${COMPONENTS}"
+export CPD_COMPONENTS="analyticsengine,db2oltp,db2wh,dv,informix_cp4d,mongodb_cp4d,planning_analytics,productmaster,watsonx_ai,watsonx_data,watsonx_governance,ws_pipelines,datastax_mc"
+export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"
 export UPDATE="false"
 export INSTALL_OPTIONS="true"
 export INSTALL_OPTIONS_FILE="install-options.yml"

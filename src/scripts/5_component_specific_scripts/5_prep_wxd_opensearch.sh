@@ -23,6 +23,10 @@ done
 
 eval "${OC_LOGIN}"
 
+#--------------------------------
+##### Opensearch uses block storage
+#--------------------------------
+
 oc get opensearchclusters -n "${PROJECT_CPD_INST_OPERANDS}"
 
 oc get pods -n "${PROJECT_CPD_INST_OPERANDS}" | grep opensearch || true
@@ -84,6 +88,18 @@ else
         fi
     done
 
+    # Delete orphaned backend/dashboards routes with no matching OpenSearch instance
+    EXISTING_ROUTES=(${(f)"$(oc get routes -n "${PROJECT_CPD_INST_OPERATORS}" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | grep -E '\-(backend|dashboards)$')"} )
+    for ROUTE in "${EXISTING_ROUTES[@]}"; do
+        [[ -z "${ROUTE:-}" ]] && continue
+        INSTANCE="${ROUTE%-backend}"
+        INSTANCE="${INSTANCE%-dashboards}"
+        if [[ ! " ${SERVICE_IDS[@]} " =~ " ${INSTANCE} " ]]; then
+            echo "[INFO] Deleting orphaned route ${ROUTE} (instance ${INSTANCE} no longer exists)."
+            oc delete route "${ROUTE}" -n "${PROJECT_CPD_INST_OPERATORS}"
+        fi
+    done
+
     echo ""
     echo "=== Routes in ${PROJECT_CPD_INST_OPERATORS} ==="
     oc get routes -n "${PROJECT_CPD_INST_OPERATORS}"
@@ -125,13 +141,14 @@ else
     done
 fi
 
+
 # ---
 # Grant kubeadmin and cpadmin the all_access role in each OpenSearch instance
 # Fixes: "OpenSearch roles could not be retrieved" in CP4D UI
 
-OS_ROLE_MAPPING_USERS=("kubeadmin" "cpadmin")
+OSEARCH_ROLE_MAPPING_USERS=("kubeadmin" "cpadmin")
 
-_os_ensure_role_mapping() {
+_OSEARCH_ensure_role_mapping() {
     local url="$1" user="$2" pass="$3" principal="$4"
 
     local http_code
@@ -146,11 +163,20 @@ _os_ensure_role_mapping() {
         return
     fi
 
+    if [[ "${http_code}" == "401" || "${http_code}" == "403" ]]; then
+        echo "[ERROR] Authentication failed (HTTP ${http_code}) for ${principal}. Check credentials in secret ${CLUSTER_NAME}-user-secret."
+        return
+    fi
+
     echo "[INFO] PATCH returned ${http_code} for ${principal}. Attempting PUT."
-    local existing merged
-    existing=$(curl -sk -u "${user}:${pass}" \
-        "${url}/_plugins/_security/api/rolesmapping/all_access" | \
-        jq '.all_access.backend_roles // []')
+    local raw_existing existing merged
+    raw_existing=$(curl -sk -u "${user}:${pass}" \
+        "${url}/_plugins/_security/api/rolesmapping/all_access")
+    if ! echo "${raw_existing}" | jq empty 2>/dev/null; then
+        echo "[ERROR] GET rolesmapping returned non-JSON response. Cannot proceed with PUT for ${principal}."
+        return
+    fi
+    existing=$(echo "${raw_existing}" | jq '.all_access.backend_roles // []')
     merged=$(echo "${existing}" | jq --arg p "${principal}" '. + [$p] | unique')
     http_code=$(curl -sk -o /dev/null -w "%{http_code}" \
         -u "${user}:${pass}" \
@@ -171,31 +197,74 @@ else
         echo ""
         echo "=== Granting all_access role mapping in OpenSearch instance: ${CLUSTER_NAME} ==="
 
-        OS_ADMIN_SECRET="${CLUSTER_NAME}-user-secret"
-        OS_ADMIN_USER=$(oc get secret "${OS_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+        OSEARCH_ADMIN_SECRET="${CLUSTER_NAME}-user-secret"
+        OSEARCH_ADMIN_USER=$(oc get secret "${OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
             -o jsonpath='{.data.username}' 2>/dev/null | base64 -d || true)
-        OS_ADMIN_PASS=$(oc get secret "${OS_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+        OSEARCH_ADMIN_PASS=$(oc get secret "${OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
             -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)
 
-        if [[ -z "${OS_ADMIN_USER:-}" || -z "${OS_ADMIN_PASS:-}" ]]; then
-            echo "[WARN] Could not retrieve admin credentials from secret ${OS_ADMIN_SECRET}. Skipping ${CLUSTER_NAME}."
+        if [[ -z "${OSEARCH_ADMIN_USER:-}" || -z "${OSEARCH_ADMIN_PASS:-}" ]]; then
+            echo "[WARN] Could not retrieve admin credentials from secret ${OSEARCH_ADMIN_SECRET}. Skipping ${CLUSTER_NAME}."
             continue
         fi
 
-        OS_HOST=$(oc get route "${CLUSTER_NAME}-backend" -n "${PROJECT_CPD_INST_OPERATORS}" \
+        OSEARCH_HOST=$(oc get route "${CLUSTER_NAME}-backend" -n "${PROJECT_CPD_INST_OPERATORS}" \
             --no-headers -o custom-columns=HOST:.spec.host 2>/dev/null || true)
 
-        if [[ -z "${OS_HOST:-}" ]]; then
+        if [[ -z "${OSEARCH_HOST:-}" ]]; then
             echo "[WARN] Could not resolve backend route for ${CLUSTER_NAME}. Skipping role mapping."
             continue
         fi
 
-        OS_URL="https://${OS_HOST}"
+        OSEARCH_URL="https://${OSEARCH_HOST}"
 
-        for PRINCIPAL in "${OS_ROLE_MAPPING_USERS[@]}"; do
-            _os_ensure_role_mapping "${OS_URL}" "${OS_ADMIN_USER}" "${OS_ADMIN_PASS}" "${PRINCIPAL}"
+        for PRINCIPAL in "${OSEARCH_ROLE_MAPPING_USERS[@]}"; do
+            _OSEARCH_ensure_role_mapping "${OSEARCH_URL}" "${OSEARCH_ADMIN_USER}" "${OSEARCH_ADMIN_PASS}" "${PRINCIPAL}"
         done
     done
 fi
 
-#### ---- the issue with the pull images was that it was using "icr.io" as a base pull prefix, rather than "cp.icr.io" which is required by the ibm_wxd_opensearch plugin.
+# --- write OpenSearch credentials to cpd_instance_details.sh ---
+REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
+VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
+
+
+if [[ ${#SERVICE_IDS[@]} -gt 0 ]]; then
+    _PRIMARY_CLUSTER="${SERVICE_IDS[1]}"
+    OSEARCH_URL="https://$(oc get route "${_PRIMARY_CLUSTER}-backend" -n "${PROJECT_CPD_INST_OPERATORS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)"
+    OSEARCH_DASHBOARDS_URL="https://$(oc get route "${_PRIMARY_CLUSTER}-dashboards" -n "${PROJECT_CPD_INST_OPERATORS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)"
+
+    # User credentials (<cluster>-user-secret, type basic-auth)
+    _OSEARCH_USER_SECRET="${_PRIMARY_CLUSTER}-user-secret"
+    OSEARCH_USERNAME="$(oc get secret "${_OSEARCH_USER_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d || true)"
+    OSEARCH_PASSWORD="$(oc get secret "${_OSEARCH_USER_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)"
+
+    # Admin credentials (<cluster>-admin-password, type Opaque)
+    _OSEARCH_ADMIN_SECRET="${_PRIMARY_CLUSTER}-admin-password"
+    OSEARCH_ADMIN_USERNAME="$(oc get secret "${_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d || true)"
+    OSEARCH_ADMIN_PASSWORD="$(oc get secret "${_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)"
+
+    if [[ -z "${OSEARCH_ADMIN_USERNAME:-}" || -z "${OSEARCH_ADMIN_PASSWORD:-}" ]]; then
+        echo "[WARN] Could not retrieve admin credentials from secret ${_OSEARCH_ADMIN_SECRET}. OSEARCH_ADMIN_* vars will be empty."
+    fi
+
+    OSEARCH_BLOCK="
+# Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+export OSEARCH_URL=\"${OSEARCH_URL}\"
+export OSEARCH_DASHBOARDS_URL=\"${OSEARCH_DASHBOARDS_URL}\"
+export OSEARCH_USERNAME=\"${OSEARCH_USERNAME}\"
+export OSEARCH_PASSWORD=\"${OSEARCH_PASSWORD}\"
+export OSEARCH_ADMIN_USERNAME=\"${OSEARCH_ADMIN_USERNAME}\"
+export OSEARCH_ADMIN_PASSWORD=\"${OSEARCH_ADMIN_PASSWORD}\""
+
+    if [[ -f "${VARS_FILE}" ]]; then
+        echo "${OSEARCH_BLOCK}" >> "${VARS_FILE}"
+        echo "[INFO] OpenSearch credentials appended to ${VARS_FILE##*/}"
+    else
+        mkdir -p "$(dirname "${VARS_FILE}")"
+        echo "${OSEARCH_BLOCK}" > "${VARS_FILE}"
+        echo "[INFO] OpenSearch credentials written to ${VARS_FILE##*/}"
+    fi
+else
+    echo "[WARN] No OpenSearch instances found - skipping credential write to ${VARS_FILE##*/}."
+fi

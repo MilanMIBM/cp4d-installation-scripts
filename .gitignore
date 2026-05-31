@@ -239,3 +239,11 @@ cpd_vars_template.sh
 cp4d_installer_mnb.py
 src/helpers/cp4d_setup_commands.py
 *.env
+src/scripts/5_component_specific_scripts/\[OLD\]5_prep_wxd_opensearch.sh
+mongodb-opsmanager-instance.json
+mongodb-ops-mgr.json
+mongodb-cp4d-instance.json
+db2oltp.yaml
+db2oltp.json
+t.json
+src/scripts/2_prepare_cluster/2.0-2.1_preliminary_setup/\[OLD\]2.0.3_preliminary_secrets_setup.sh

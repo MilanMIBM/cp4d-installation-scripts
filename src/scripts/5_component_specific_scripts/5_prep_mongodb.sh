@@ -63,12 +63,39 @@ for INSTANCE in ${(s: :)MONGO_INSTANCES}; do
     OPS_PASS=$(oc get CPDMongoDBOpsManager "${INSTANCE}" -n "${PROJECT_CPD_INST_OPERANDS}" \
         -o jsonpath='{.spec.parameters.opspassword}' 2>/dev/null)
 
+    # Retrieve private key from admin key secret
+    ADMIN_KEY_SECRET="${PROJECT_CPD_INST_OPERANDS}-mongodb-${INSTANCE}-ops-manager-admin-key"
+    OPS_PRIVATE_KEY=$(oc get secret "${ADMIN_KEY_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+        -o jsonpath='{.data.privateKey}' 2>/dev/null | base64 -d 2>/dev/null || true)
+
     echo ""
     echo "  MongoDB Ops Manager - ${INSTANCE}"
-    echo "  URL:      https://${OPS_URL}"
-    echo "  Username: ${OPS_USER}"
-    echo "  Password: ${OPS_PASS}"
+    echo "  URL:         https://${OPS_URL}"
+    echo "  Username:    ${OPS_USER}"
+    echo "  Password:    ${OPS_PASS}"
+    echo "  Private Key: ${OPS_PRIVATE_KEY:-[not found: ${ADMIN_KEY_SECRET}]}"
     echo ""
+
+    # --- write MongoDB credentials to cpd_instance_details.sh ---
+    REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
+    VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
+
+    MONGODB_BLOCK="
+# Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#--- MongoDB Ops Manager - ${INSTANCE}
+export MONGODB_OPS_URL=\"https://${OPS_URL}\"
+export MONGODB_OPS_USERNAME=\"${OPS_USER}\"
+export MONGODB_OPS_PASSWORD=\"${OPS_PASS}\"
+export MONGODB_OPS_API_KEY=\"${OPS_PRIVATE_KEY}\""
+
+    if [[ -f "${VARS_FILE}" ]]; then
+        echo "${MONGODB_BLOCK}" >> "${VARS_FILE}"
+        echo "[INFO] MongoDB credentials appended to ${VARS_FILE##*/}"
+    else
+        mkdir -p "$(dirname "${VARS_FILE}")"
+        echo "${MONGODB_BLOCK}" > "${VARS_FILE}"
+        echo "[INFO] MongoDB credentials written to ${VARS_FILE##*/}"
+    fi
 done
 
 echo "=== Done ==="

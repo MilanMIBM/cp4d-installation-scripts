@@ -33,6 +33,44 @@ fi
 if $_has_icr; then
     cpd-cli manage add-icr-cred-to-global-pull-secret \
         --entitled_registry_key=${IBM_ENTITLEMENT_KEY}
+
+    REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
+    PULL_SECRET_FILE="${REPO_ROOT}/cp4d_config/pull-secret.dockerconfigjson"
+
+    _raw_secret="$(oc get secret pull-secret -n openshift-config -o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null | base64 --decode)" || true
+
+    if [[ -n "${_raw_secret}" ]]; then
+        if echo "${_raw_secret}" | python3 -c "import sys, json; d=json.load(sys.stdin); exit(0 if 'icr.io' in d.get('auths',{}) else 1)" 2>/dev/null; then
+            echo "[INFO] icr.io auth already present in openshift-config pull-secret - no patch needed."
+            _patched="${_raw_secret}"
+        else
+            echo "[INFO] icr.io auth not found - patching pull-secret with cp.icr.io credentials."
+            _cp_auth="$(echo "${_raw_secret}" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d['auths'].get('cp.icr.io',{}).get('auth',''))")"
+            if [[ -z "${_cp_auth}" ]]; then
+                echo "[WARN] cp.icr.io auth not found in pull-secret; skipping icr.io patch." >&2
+                _patched="${_raw_secret}"
+            else
+                _patched="$(echo "${_raw_secret}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+cp_entry = d['auths']['cp.icr.io']
+d['auths']['icr.io'] = cp_entry
+print(json.dumps(d, indent=2))
+")"
+                _patched_b64="$(echo -n "${_patched}" | base64 | tr -d '\n')"
+                oc patch secret pull-secret -n openshift-config \
+                    --type=merge \
+                    -p "{\"data\":{\".dockerconfigjson\":\"${_patched_b64}\"}}"
+                echo "[INFO] pull-secret patched with icr.io auth."
+            fi
+        fi
+
+        mkdir -p "$(dirname "${PULL_SECRET_FILE}")"
+        echo "${_patched}" | python3 -c "import sys, json; print(json.dumps(json.load(sys.stdin), indent=2))" > "${PULL_SECRET_FILE}"
+        echo "[INFO] pull-secret saved to ${PULL_SECRET_FILE}"
+    else
+        echo "[WARN] Could not retrieve pull-secret from openshift-config; skipping icr.io patch." >&2
+    fi
 fi
 
 if $_has_private; then

@@ -11,9 +11,11 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../../source_env_setup.sh"
 
+export CP_OPEN_DOWNLOAD=true # downloads the cases and images from cp.icr.io/cpopen rather than ibm's github.
+
 PARAM_FILE_FLAG=()
 if [[ -n "${INSTALL_OPTIONS}" ]]; then
-    PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
+    PARAM_FILE_FLAG=(--param-file="${CPD_CONFIG_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
 fi
 
 PATCH_FLAG=()
@@ -51,7 +53,9 @@ if [[ "${HAS_LICENSING}" == true ]]; then
         --license_acceptance=true \
         --licensing_ns=${PROJECT_LICENSE_SERVICE} \
         --case_download=true \
-        "${PATCH_FLAG[@]}"
+        --from_oci=${CP_OPEN_DOWNLOAD} \
+        "${PATCH_FLAG[@]}" \
+        --verbose
 
 fi
 
@@ -64,7 +68,7 @@ if [[ "${HAS_SCHEDULER}" == true ]]; then
         --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
         --image_pull_prefix=${IMAGE_PULL_PREFIX} \
         --image_pull_secret=${IMAGE_PULL_SECRET} \
+        --from_oci=${CP_OPEN_DOWNLOAD} \
         --case_download=true \
-        "${PARAM_FILE_FLAG[@]}" \
         "${PATCH_FLAG[@]}"
 fi

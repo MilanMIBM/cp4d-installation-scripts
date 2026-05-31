@@ -14,7 +14,7 @@ source "${SCRIPT_DIR}/../source_env_setup.sh"
 _SPARK_COMPONENTS=(analyticsengine dp dataproduct wkc ikc_premium ikc_standard datalineage watsonx_bi_assistant watsonx_data watsonx_data_premium watsonx_dataintelligence)
 ENABLE_SPARK_AUTOSCALING=false
 for _c in "${_SPARK_COMPONENTS[@]}"; do
-    if [[ ",${COMPONENTS}," == *",${_c},"* ]]; then
+    if [[ ",${CPD_COMPONENTS}," == *",${_c},"* ]]; then
         ENABLE_SPARK_AUTOSCALING=true
         break
     fi

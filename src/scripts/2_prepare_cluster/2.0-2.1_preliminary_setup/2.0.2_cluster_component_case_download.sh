@@ -11,6 +11,7 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../../source_env_setup.sh"
 
+export CP_OPEN_DOWNLOAD=true # downloads the cases and images from cp.icr.io/cpopen rather than ibm's github.
 
 PATCH_FLAG=()
 if [[ -n "${PATCH_ID}" ]]; then
@@ -21,22 +22,25 @@ fi
 eval "${CPDM_OC_LOGIN}"
 
 cpd-cli manage case-download \
-    --components=${CPD_COMPONENTS} \
+    --components=${COMPLETE_COMPONENT_LIST} \
     --release=${VERSION} \
     --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --cluster_resources=true \
-    "${PATCH_FLAG[@]}"
-
+    "${PATCH_FLAG[@]}" \
+    --from_oci=${CP_OPEN_DOWNLOAD}
+    
 eval "${OC_LOGIN}"
 
 oc apply -f "${CPD_CLI_WORK_PATH}/cluster_scoped_resources.yaml" \
     --server-side \
-    --force-conflicts
+    --force-conflicts \
+    --overwrite
 
-mv cluster_scoped_resources.yaml "${VERSION}-${PROJECT_CPD_INST_OPERATORS}-cluster_scoped_resources.yaml"
+# mv cluster_scoped_resources.yaml "${VERSION}-${PROJECT_CPD_INST_OPERATORS}-cluster_scoped_resources.yaml"
 
 cpd-cli manage authorize-instance-topology \
     --cpd_operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --verbose

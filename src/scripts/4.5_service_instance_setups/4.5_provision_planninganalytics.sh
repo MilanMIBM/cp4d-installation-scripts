@@ -23,7 +23,7 @@ eval "${OC_LOGIN}"
 
 #---
 # export PLANNING_PAYLOAD_FILE="${SCRIPT_DIR}/planning-analytics-instance.json"
-export PLANNING_PAYLOAD_FILE="./planning-analytics-instance.json"
+export PLANNING_PAYLOAD_FILE="${SERVICE_INSTANCE_FILE_DIR}/planning-analytics-instance.json"
 CPD_PROFILE_NAME="${CPD_USERNAME}-profile"
 #---
 PA_INSTANCE_VERSION="5.3.3"
@@ -36,7 +36,7 @@ PA_INSTANCE_SIZE="small" # small_mincpureq, small, medium, large
 
 
 # "persistence.class":"${STG_CLASS_BLOCK}" /or/ "${STG_CLASS_FILE}" and "tm1Service.storageClass":"${STG_CLASS_FILE}". 
-PREP_PLANNINGANALYTICS='cat << EOF > ./planning-analytics-instance.json
+PREP_PLANNINGANALYTICS='cat << EOF > ${PLANNING_PAYLOAD_FILE}
 {
     "addon_type":"pa",
     "addon_version":"${PA_INSTANCE_VERSION}",

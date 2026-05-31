@@ -10,6 +10,8 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../source_env_setup.sh"
 
+export CP_OPEN_DOWNLOAD=true # downloads the cases and images from cp.icr.io/cpopen rather than ibm's github.
+
 # ---
 
 eval "${CPDM_OC_LOGIN}"
@@ -21,7 +23,7 @@ fi
 
 PARAM_FILE_FLAG=()
 if [[ -n "${INSTALL_OPTIONS}" ]]; then
-    PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
+    PARAM_FILE_FLAG=(--param-file="${CPD_CONFIG_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
 fi
 
 PATCH_FLAG=()
@@ -35,7 +37,8 @@ cpd-cli manage case-download \
     --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
-    --cluster_resources=true
+    --cluster_resources=true \
+    --from_oci=${CP_OPEN_DOWNLOAD}
 
 eval "${OC_LOGIN}"
 
@@ -52,7 +55,7 @@ cpd-cli manage install-components \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --block_storage_class=${STG_CLASS_BLOCK} \
     --file_storage_class=${STG_CLASS_FILE} \
-    --image_pull_prefix="cp.icr.io" \
+    --image_pull_prefix=${IMAGE_PULL_PREFIX} \
     --image_pull_secret=${IMAGE_PULL_SECRET} \
     "${PARAM_FILE_FLAG[@]}" \
     "${SKIP_COMPONENTS_FLAG[@]}" \
@@ -61,3 +64,13 @@ cpd-cli manage install-components \
 
 # --- apply the necessary security context level
 oc adm policy add-scc-to-user privileged -z wxd-opensearch-sa -n ${PROJECT_CPD_INST_OPERANDS}
+
+# --- mark opensearch as prepared in cpd_vars.sh
+CPD_VARS_FILE="${SCRIPT_DIR}/../../cp4d_config/cpd_vars.sh"
+if [[ -f "${CPD_VARS_FILE}" ]] && ! grep -q 'export PREP_OPENSEARCH=' "${CPD_VARS_FILE}"; then
+    echo '' >> "${CPD_VARS_FILE}"
+    echo 'export PREP_OPENSEARCH="true"' >> "${CPD_VARS_FILE}"
+fi
+
+# --- correct icr.io → cp.icr.io image references in opensearch CRs and Helm deployments
+"${SCRIPT_DIR}/4.1.2_correct_wxd_opensearch_imgpull.sh"

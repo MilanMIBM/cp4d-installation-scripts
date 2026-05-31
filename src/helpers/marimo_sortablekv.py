@@ -1,4 +1,5 @@
 from typing import Sequence
+import marimo as mo
 import anywidget
 import traitlets
 
@@ -394,7 +395,9 @@ class SortableKV(anywidget.AnyWidget):
         **kwargs,
     ) -> None:
         rows = [
-            {"key": str(r.get("key", "")), "value": str(r.get("value", ""))}
+            {"key": str(r), "value": ""}
+            if isinstance(r, str)
+            else {"key": str(r.get("key", "")), "value": str(r.get("value", ""))}
             for r in value
         ]
         super().__init__(
@@ -408,3 +411,30 @@ class SortableKV(anywidget.AnyWidget):
             value_placeholder=value_placeholder,
             **kwargs,
         )
+
+
+def sortable_kv(
+    value: Sequence[dict],
+    *,
+    addable: bool = False,
+    removable: bool = False,
+    editable: bool = True,
+    movable: bool = True,
+    label: str = "",
+    key_placeholder: str = "key",
+    value_placeholder: str = "value",
+    **kwargs,
+) -> mo.ui.anywidget:
+    return mo.ui.anywidget(
+        SortableKV(
+            value,
+            addable=addable,
+            removable=removable,
+            editable=editable,
+            movable=movable,
+            label=label,
+            key_placeholder=key_placeholder,
+            value_placeholder=value_placeholder,
+            **kwargs,
+        )
+    )

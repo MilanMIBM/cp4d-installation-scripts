@@ -13,5 +13,4 @@ CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 "${CURRENT_DIR}/2.0.1_preliminary_project_setup.sh"
 "${CURRENT_DIR}/2.0.2_cluster_component_case_download.sh"
-"${CURRENT_DIR}/2.0.3_preliminary_secrets_setup.sh"
 "${CURRENT_DIR}/2.1_apply_shared_cluster_CASE_packages.sh"

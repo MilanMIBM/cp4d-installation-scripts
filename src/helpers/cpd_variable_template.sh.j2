@@ -71,7 +71,7 @@ export PRIVATE_REGISTRY_PULL_PASSWORD="{{ cp4d_private_registry_naming.get("PRIV
 # Image pull configuration
 # ------------------------------------------------------------------------------
 
-export IMAGE_PULL_SECRET="{{ pull_secret_name_input.value }}"{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" %}
+export IMAGE_PULL_SECRET="{{ pull_secret_name_input.value | default('pull-secret') }}"{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" %}
 export IMAGE_PULL_CREDENTIALS="$(echo -n "cp:$IBM_ENTITLEMENT_KEY" | base64 -w 0)"
 export IMAGE_PULL_PREFIX="icr.io"{% else %}
 export IMAGE_PULL_CREDENTIALS="$(echo -n "$PRIVATE_REGISTRY_PULL_USER:$PRIVATE_REGISTRY_PULL_PASSWORD" | base64 -w 0)"
@@ -84,8 +84,8 @@ export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"{% endif %}
 # ------------------------------------------------------------------------------
 
 export VERSION="{{ cp4d_version_input.value }}"
-export PATCH_ID=""
-export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}"
+export PATCH_ID="" # "5" - Current patch as of 21.05.2026
+export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) or jsut use "latest"
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
 # ------------------------------------------------------------------------------
@@ -93,8 +93,8 @@ export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 # ------------------------------------------------------------------------------
 
 export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform"
-export COMPONENTS="{{ components_to_install_str.split(',') | reject('equalto', 'ibm_wxd_opensearch') | join(',') }}"
-export CPD_COMPONENTS="${SOFTWARE_HUB},${COMPONENTS}"{% if optional_images_str %}
+export CPD_COMPONENTS="{{ components_to_install_str.split(',') | reject('equalto', 'ibm_wxd_opensearch') | join(',') }}"
+export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"{% if optional_images_str %}
 export IMAGE_GROUPS="{{ optional_images_str }}"{% endif %}
 export UPDATE="{{ updating_components_checkbox.value | lower }}"
 export INSTALL_OPTIONS="{{ install_options_addon.value | lower }}"{% if install_options_addon.value == true %}
@@ -114,6 +114,7 @@ export LICENSE_ENTITLEMENTS="{{ entitlements_to_apply_str }}"
 {% if components_to_install_str.split(',') | select('in', ['db2oltp', 'db2wh', 'db2aaservice', 'openpages', 'watsonx_governance']) | list %}export PREP_DB2="true"{% endif %}
 {% if 'ibm_wxd_opensearch' in components_to_install_str.split(',') %}export PREP_OPENSEARCH="true"{% endif %}
 {% if 'informix' in components_to_install_str.split(',') or 'informix_cp4d' in components_to_install_str.split(',') %}export PREP_INFORMIX="true"{% endif %}
+{% if 'mongodb' in components_to_install_str.split(',') or 'mongodb_cp4d' in components_to_install_str.split(',') %}export PREP_MONGODB="true"{% endif %}
 {% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') %}export PREP_DATASTAX="true"{% endif %}
 {% if 'planning_analytics' in components_to_install_str.split(',') %}export PREP_PA="true"{% endif %}
 {% if 'cognos_analytics' in components_to_install_str.split(',') %}export PREP_CA="true"{% endif %}

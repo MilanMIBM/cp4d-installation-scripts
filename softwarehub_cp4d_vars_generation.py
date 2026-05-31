@@ -212,7 +212,7 @@ def _():
         "login_arguments": "**Select how you want to login to the cluster:**",
         "pull_secrets": "**Select your pull secret type:**",
         "pull_secret_name": "**Select your pull secret variable name:**",
-        "storage_block": "**Select your pull file storage class:**",
+        "storage_block": "**Select your pull block storage class:**",
         "storage_file": "**Select your pull file storage class:**",
         "components_multiselect": "**Select all of the components you wish to install:**",
         "entitlements_multiselect": "**Select all of the license entitlements you wish to apply:**",
@@ -320,8 +320,12 @@ def _(
 
 
 @app.cell
-def _(run_button):
-    run_button.center()
+def _(run_button, save_to_config_dir_button):
+    mo.hstack(
+        [run_button, save_to_config_dir_button],
+        justify="center",
+        gap=20,
+    )
     return
 
 
@@ -730,7 +734,7 @@ def _(widget_labels):
 def _(widget_labels):
     pull_secret_name_input = mo.ui.text(
         label=widget_labels.get("pull_secret_name"),
-        value="ibm-image-pull-secret",
+        value="pull-secret",
         kind="text",
         full_width=False,
     )
@@ -759,12 +763,20 @@ def _():
 
 
 @app.cell
-def _(render_template_from_environment, run_button):
+def _():
+    save_to_config_dir_button = mo.ui.run_button(
+        label="**Save to ./cp4d_config/**", kind="warn"
+    )
+    return (save_to_config_dir_button,)
+
+
+@app.cell
+def _(render_template_from_environment, run_button, save_to_config_dir_button):
     rendered_variables_file_cpd = (
         render_template_from_environment(
             template_path="src/helpers/cpd_variable_template.sh.j2"
         )
-        if run_button.value
+        if run_button.value or save_to_config_dir_button.value
         else ""
     )
     return (rendered_variables_file_cpd,)
@@ -897,12 +909,18 @@ def _(
 
 
 @app.cell
-def _(install_options_addon, render_template_from_environment, run_button):
+def _(
+    install_options_addon,
+    render_template_from_environment,
+    run_button,
+    save_to_config_dir_button,
+):
     rendered_variables_file_inst_options = (
         render_template_from_environment(
             template_path="src/helpers/install_options_template.sh.j2"
         )
-        if run_button.value and install_options_addon.value
+        if (run_button.value or save_to_config_dir_button.value)
+        and install_options_addon.value
         else ""
     )
     return (rendered_variables_file_inst_options,)
@@ -920,6 +938,44 @@ def _(install_options_addon, rendered_variables_file_inst_options):
         disabled=(not install_options_addon.value),
     )
     return (inst_options_template_editor,)
+
+
+@app.cell
+def _(
+    cpd_vars_filename,
+    cpd_vars_template_editor,
+    inst_options_filename,
+    inst_options_template_editor,
+    install_options_addon,
+    save_to_config_dir_button,
+):
+    _save_result = None
+    if save_to_config_dir_button.value and cpd_vars_template_editor.value:
+        _config_dir = os.path.join(os.path.dirname(__file__), "cp4d_config")
+        os.makedirs(_config_dir, exist_ok=True)
+
+        _cpd_vars_path = os.path.join(_config_dir, cpd_vars_filename)
+        with open(_cpd_vars_path, "w") as _f:
+            _f.write(cpd_vars_template_editor.value)
+
+        _saved = [_cpd_vars_path]
+
+        if install_options_addon.value and inst_options_template_editor.value:
+            _inst_opts_path = os.path.join(_config_dir, inst_options_filename)
+            with open(_inst_opts_path, "w") as _f:
+                _f.write(inst_options_template_editor.value)
+            _saved.append(_inst_opts_path)
+
+        _save_result = mo.callout(
+            mo.md(
+                "**Saved to `./cp4d_config/`:**\n"
+                + "\n".join(f"- `{p}`" for p in _saved)
+            ),
+            kind="success",
+        )
+
+    _save_result
+    return
 
 
 if __name__ == "__main__":

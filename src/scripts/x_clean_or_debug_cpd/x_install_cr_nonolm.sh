@@ -10,37 +10,30 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../source_env_setup.sh"
 
-# ---
-
-for var in CPD_COMPONENTS VERSION PROJECT_CPD_INST_OPERATORS PROJECT_CPD_INST_OPERANDS STG_CLASS_BLOCK STG_CLASS_FILE IMAGE_PULL_PREFIX IMAGE_PULL_SECRET; do
-    if [[ -z "${(P)var:-}" ]]; then
-        echo "Error: ${var} is not set. Set it in ./cpd_vars.sh before running this script."
-        exit 1
-    fi
-done
-
 eval "${CPDM_OC_LOGIN}"
 
-SKIP_COMPONENTS_FLAG=()
-if [[ -n "${COMPONENTS_TO_SKIP:-}" ]]; then
-    SKIP_COMPONENTS_FLAG=(--skip_components="${COMPONENTS_TO_SKIP}")
-fi
+# COMPONENT_LIST=(
+#     "ccs"
+# )
+
+# COMPONENT_LIST_STRING=$(IFS=,; echo "${COMPONENT_LIST[*]}")
+# COMPONENT_LIST_STRING="${COMPLETE_COMPONENT_LIST}"
+
+COMPONENT="ccs"
 
 PARAM_FILE_FLAG=()
 if [[ -n "${INSTALL_OPTIONS}" ]]; then
     PARAM_FILE_FLAG=(--param-file="${CPD_CONFIG_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
 fi
-    # PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}") - old variant
 
 PATCH_FLAG=()
 if [[ -n "${PATCH_ID}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
-
 cpd-cli manage install-components \
     --license_acceptance=true \
-    --components=${CPD_COMPONENTS} \
+    --components=${COMPONENT} \
     --release=${VERSION} \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
@@ -49,31 +42,24 @@ cpd-cli manage install-components \
     --image_pull_prefix=${IMAGE_PULL_PREFIX} \
     --image_pull_secret=${IMAGE_PULL_SECRET} \
     "${PARAM_FILE_FLAG[@]}" \
-    "${SKIP_COMPONENTS_FLAG[@]}" \
     --upgrade=${UPDATE} \
     "${PATCH_FLAG[@]}"
 
+# cpd-cli manage update-cr \
+#     --component=${COMPONENT} \
+#     --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#     --cluster_component_ns=${PROJECT_CPD_INST_OPERATORS} \
+#     "${PATCH_FLAG[@]}" \
+#     --verbose
 
-
-# COMPONENTS_TO_INST=(
-#     "analyticsengine"
-#     "factsheet"
-#     "watsonx_data"
-# )
-
-# COMPONENTS_TO_INST_STRING=$(IFS=,; echo "${COMPONENTS_TO_INST[*]}")
-
-# cpd-cli manage install-components \
+# cpd-cli manage apply-cr \
 #     --license_acceptance=true \
-#     --components=${COMPONENTS_TO_INST_STRING} \
+#     --components=${COMPONENT_LIST_STRING} \
 #     --release=${VERSION} \
-#     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-#     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#     --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
 #     --block_storage_class=${STG_CLASS_BLOCK} \
 #     --file_storage_class=${STG_CLASS_FILE} \
-#     --image_pull_prefix=${IMAGE_PULL_PREFIX} \
-#     --image_pull_secret=${IMAGE_PULL_SECRET} \
 #     "${PARAM_FILE_FLAG[@]}" \
-#     "${SKIP_COMPONENTS_FLAG[@]}" \
 #     --upgrade=${UPDATE} \
-#     "${PATCH_FLAG[@]}"
+#     --parallel_num=4 \
+#     --verbose

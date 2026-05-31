@@ -15,10 +15,12 @@ non_olm:
 # ------------------------------------------------------------------------------
 # This preset is meant to not over-commit nodes on the cluster which is very easy with larger configs of analyticsengine.
     serviceConfig:
+      pullWxdImagesOnly: false
+      enableImagePrepull: true
       sparkAdvEnabled: true
       jobAutoDeleteEnabled: true
       kernelCullTime: 30
-      imagePullParallelism: "10"
+      imagePullParallelism: "8"
       imagePullCompletions: "6"
       kernelCleanupSchedule: "*/30 * * * *"
       jobCleanupSchedule: "*/30 * * * *"
@@ -31,7 +33,7 @@ non_olm:
     sparkRuntimeConfig:
       maxDriverCpuCores: 2
       maxExecutorCpuCores: 3
-      maxDriveMemory: "4g"
+      maxDriverMemory: "4g"
       maxExecutorMemory: "4g"
       maxNumWorkers: 6
       localDirScaleFactor: 5
@@ -342,6 +344,7 @@ non_olm:
   watsonxData:
     enable_lite_milvus: false
     scaleConfig: small
+    enable_watsonx_platform: false # Set to true if you want to have the watsonx.data premium UI Context even if you don't install all components.
 {% endif %}{% if "watsonx_data_premium" in components_to_install %}
 ---
 # ............................................................................
