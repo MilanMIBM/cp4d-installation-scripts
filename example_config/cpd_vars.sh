@@ -59,7 +59,7 @@ export IBM_ENTITLEMENT_KEY="<ibm entitlement key>"
 # Image pull configuration
 # ------------------------------------------------------------------------------
 
-export IMAGE_PULL_SECRET="ibm-image-pull-secret"
+export IMAGE_PULL_SECRET="pull-secret"
 export IMAGE_PULL_CREDENTIALS="$(echo -n "cp:$IBM_ENTITLEMENT_KEY" | base64 -w 0)"
 export IMAGE_PULL_PREFIX="icr.io"
 
@@ -68,16 +68,16 @@ export IMAGE_PULL_PREFIX="icr.io"
 # ------------------------------------------------------------------------------
 
 export VERSION="5.3.1"
-export PATCH_ID="latest"
-export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}"
-export CPD_ADMIN_USERNAME="kubeadmin"
+export PATCH_ID="5" # "5" - Current patch as of 21.05.2026
+export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) or jsut use "latest"
+export CPD_ADMIN_USERNAME="cpadmin"
 
 # ------------------------------------------------------------------------------
 # Components
 # ------------------------------------------------------------------------------
 
 export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform"
-export CPD_COMPONENTS="analyticsengine,db2oltp,db2wh,dv,informix_cp4d,mongodb_cp4d,planning_analytics,productmaster,watsonx_ai,watsonx_data,watsonx_governance,ws_pipelines,datastax_mc"
+export CPD_COMPONENTS="analyticsengine,datastage_ent,dv,edb_cp4d,informix_cp4d,mongodb_cp4d,watsonx_data,datastax_mc"
 export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"
 export UPDATE="false"
 export INSTALL_OPTIONS="true"
@@ -88,14 +88,12 @@ export INSTALL_OPTIONS_FILE="install-options.yml"
 # ------------------------------------------------------------------------------
 
 export PROD_LICENSE="true"
-export LICENSE_ENTITLEMENTS="cpd-enterprise,cognos-analytics,planning-analytics,product-master,watsonx-ai,watsonx-data,watsonx-data-premium,watsonx-dataintegration,watsonx-dataintelligence,watsonx-gov-mm,watsonx-gov-rc"
+export LICENSE_ENTITLEMENTS="cpd-enterprise,watsonx-ai,watsonx-data,watsonx-data-premium"
 
 # ------------------------------------------------------------------------------
 # Product Specific SCC requirements
 # ------------------------------------------------------------------------------
 
-export PREP_DB2="true"
-export PREP_OPENSEARCH="true"
 export PREP_INFORMIX="true"
+export PREP_MONGODB="true"
 export PREP_DATASTAX="true"
-export PREP_PA="true"

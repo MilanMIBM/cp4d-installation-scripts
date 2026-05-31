@@ -8,8 +8,10 @@
 ## Registry & Authentication
 
 ### `add-cred-to-global-pull-secret`
+
 Update the global image pull secret for a private container registry.
-```
+
+```bash
 cpd-cli manage add-cred-to-global-pull-secret \
   --registry=<PRIVATE_REGISTRY_LOCATION> \
   --registry_pull_user=<PRIVATE_REGISTRY_PULL_USER> \
@@ -18,22 +20,28 @@ cpd-cli manage add-cred-to-global-pull-secret \
 ```
 
 ### `add-icr-cred-to-global-pull-secret`
+
 Update the global image pull secret for the IBM Entitled Registry.
-```
+
+```bash
 cpd-cli manage add-icr-cred-to-global-pull-secret \
   --entitled_registry_key=<IBM_ENTITLEMENT_KEY> \
   [--preview=true|false]
 ```
 
 ### `login-entitled-registry`
+
 Log in to the IBM Entitled Registry before mirroring images.
-```
+
+```bash
 cpd-cli manage login-entitled-registry <IBM_ENTITLEMENT_KEY>
 ```
 
 ### `login-private-registry`
+
 Log in to a private container registry before mirroring images.
-```
+
+```bash
 cpd-cli manage login-private-registry \
   <PRIVATE_REGISTRY_LOCATION> \
   [<PRIVATE_REGISTRY_PUSH_USER>] \
@@ -41,8 +49,10 @@ cpd-cli manage login-private-registry \
 ```
 
 ### `login-to-ocp`
+
 Log in to OpenShift Container Platform (same args as `oc login`).
-```
+
+```bash
 cpd-cli manage login-to-ocp <openshift login arguments>
 # e.g.
 cpd-cli manage login-to-ocp --server=https://apiserver:6443 -u kubeadmin -p <password>
@@ -54,8 +64,10 @@ cpd-cli manage login-to-ocp --server=https://apiserver:6443 --token=sha256~<toke
 ## CASE Packages & Patches
 
 ### `case-download`
+
 Download CASE packages to the client workstation.
-```
+
+```bash
 cpd-cli manage case-download \
   --release=<version> \
   --components=<comma-separated list> \
@@ -69,16 +81,20 @@ cpd-cli manage case-download \
 ```
 
 ### `patch-download`
+
 Download patch metadata from GitHub to the client workstation.
-```
+
+```bash
 cpd-cli manage patch-download \
   --release=<version> \
   [--patch_id=<patch ID>]
 ```
 
 ### `list-patch`
+
 Scan cluster for installed components and list available patches.
-```
+
+```bash
 cpd-cli manage list-patch \
   [--release=<version>] \
   [--instance_ns=<project name>] \
@@ -86,8 +102,10 @@ cpd-cli manage list-patch \
 ```
 
 ### `apply-patch`
+
 Apply the latest patch to all components on an IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage apply-patch \
   --release=<version> \
   --operator_ns=<project name> \
@@ -105,8 +123,10 @@ cpd-cli manage apply-patch \
 ## Cluster Setup & Configuration
 
 ### `apply-cluster-components`
+
 Install or upgrade cluster-wide components (e.g. `ibm-licensing-operator`).
-```
+
+```bash
 cpd-cli manage apply-cluster-components \
   --release=<version> \
   --license_acceptance=true|false \
@@ -120,8 +140,10 @@ cpd-cli manage apply-cluster-components \
 ```
 
 ### `apply-scheduler`
+
 Install or upgrade the scheduling service.
-```
+
+```bash
 cpd-cli manage apply-scheduler \
   --release=<version> \
   --license_acceptance=true|false \
@@ -141,8 +163,10 @@ cpd-cli manage apply-scheduler \
 ```
 
 ### `authorize-instance-topology`
+
 Create projects, set up NamespaceScope operator, apply required roles. Run before `install-components`.
-```
+
+```bash
 cpd-cli manage authorize-instance-topology \
   --cpd_operator_ns=<project name> \
   --cpd_instance_ns=<project name> \
@@ -152,32 +176,40 @@ cpd-cli manage authorize-instance-topology \
 ```
 
 ### `apply-db2-kubelet`
+
 Apply required kubelet configuration for Db2U kernel parameters.
-```
+
+```bash
 cpd-cli manage apply-db2-kubelet \
   [--preview=true|false] \
   [--force=true|false]
 ```
 
 ### `apply-pid-limit`
+
 Create a KubeletConfig to change the number of process IDs a pod can use.
-```
+
+```bash
 cpd-cli manage apply-pid-limit \
   [--preview=true|false] \
   [--pid_limit=<number of process IDs>]
 ```
 
 ### `apply-icsp`
+
 Create the image content source policy for a private container registry.
-```
+
+```bash
 cpd-cli manage apply-icsp \
   --registry=<PRIVATE_REGISTRY_LOCATION> \
   [--preview=true|false]
 ```
 
 ### `apply-scc`
+
 Create a custom security context constraint (SCC) for the `informix` component.
-```
+
+```bash
 cpd-cli manage apply-scc \
   --cpd_instance_ns=<project name> \
   --components=<component names> \
@@ -190,8 +222,10 @@ cpd-cli manage apply-scc \
 ## Install & Upgrade Components
 
 ### `install-components`
+
 Install or upgrade components on an IBM Software Hub instance. **Replaces deprecated `setup-instance` and `setup-instance-topology`.**
-```
+
+```bash
 cpd-cli manage install-components \
   --license_acceptance=true|false \
   --components=<comma-separated list> \
@@ -215,8 +249,10 @@ cpd-cli manage install-components \
 ```
 
 ### `uninstall-components`
+
 Uninstall components from an instance (removes helm releases, K8s resources, OLM artifacts, CRs).
-```
+
+```bash
 cpd-cli manage uninstall-components \
   --instance_ns=<project name> \
   --components=<comma-separated list> \
@@ -226,8 +262,10 @@ cpd-cli manage uninstall-components \
 ```
 
 ### `setup-control-center`
+
 Install or upgrade IBM Software Hub Control Center.
-```
+
+```bash
 cpd-cli manage setup-control-center \
   --release=<version> \
   --license_acceptance=true|false \
@@ -255,8 +293,10 @@ cpd-cli manage setup-control-center \
 ## Custom Resources & Status
 
 ### `get-cr-status`
+
 Get status of installed components (CR status, version, timestamps).
-```
+
+```bash
 cpd-cli manage get-cr-status \
   [--cpd_instance_ns=<project name>] \
   [--tethered_instance_ns=<comma-separated list>] \
@@ -268,8 +308,10 @@ cpd-cli manage get-cr-status \
 ```
 
 ### `update-cr`
+
 Update the spec of a custom resource for a component.
-```
+
+```bash
 cpd-cli manage update-cr \
   --component=<component name> \
   --patch=<patch JSON to apply to spec> \
@@ -280,8 +322,10 @@ cpd-cli manage update-cr \
 ```
 
 ### `delete-cr`
+
 Delete custom resources for specified components (uninstall step).
-```
+
+```bash
 cpd-cli manage delete-cr \
   --cpd_instance_ns=<project name> \
   --components=<comma-separated list> \
@@ -291,8 +335,10 @@ cpd-cli manage delete-cr \
 ```
 
 ### `delete-cluster-scoped-resources`
+
 Generate uninstall list for cluster-scoped resources (cluster roles, webhooks, CRDs).
-```
+
+```bash
 cpd-cli manage delete-cluster-scoped-resources \
   [--operator_ns=<project name>] \
   [--components=<comma-separated list>] \
@@ -302,8 +348,10 @@ cpd-cli manage delete-cluster-scoped-resources \
 ```
 
 ### `delete-olm-artifacts`
+
 Remove OLM artifacts (catalog sources, CSVs, subscriptions) for specified components.
-```
+
+```bash
 cpd-cli manage delete-olm-artifacts \
   --cpd_operator_ns=<project name> \
   [--components=<comma-separated list>] \
@@ -314,8 +362,10 @@ cpd-cli manage delete-olm-artifacts \
 ```
 
 ### `get-olm-artifacts`
+
 Get the list of catalog sources and operator subscriptions on the cluster.
-```
+
+```bash
 cpd-cli manage get-olm-artifacts \
   [--subscription_ns=<project name>]
 ```
@@ -325,15 +375,19 @@ cpd-cli manage get-olm-artifacts \
 ## Listing & Discovery
 
 ### `list-components`
+
 Get the list of components supported by `cpd-cli manage`. Output saved to `components.csv`.
-```
+
+```bash
 cpd-cli manage list-components \
   --release=<version>
 ```
 
 ### `list-deployed-components`
+
 List components installed in a specific IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage list-deployed-components \
   --cpd_instance_ns=<project name> \
   [--scheduler_ns=<project name>] \
@@ -341,32 +395,40 @@ cpd-cli manage list-deployed-components \
 ```
 
 ### `list-prereqs`
+
 List prerequisite components for specified components.
-```
+
+```bash
 cpd-cli manage list-prereqs \
   --release=<version> \
   --components=<comma-separated list>
 ```
 
 ### `list-dependents`
+
 List components that depend on the specified components.
-```
+
+```bash
 cpd-cli manage list-dependents \
   --release=<version> \
   --components=<comma-separated list>
 ```
 
 ### `get-cpd-instance-details`
+
 Get the web client URL and default `cpadmin` credentials.
-```
+
+```bash
 cpd-cli manage get-cpd-instance-details \
   --cpd_instance_ns=<project name> \
   [--get_admin_initial_credentials=true|false]
 ```
 
 ### `get-k8s-details`
+
 Get detailed information about K8s objects associated with IBM Software Hub.
-```
+
+```bash
 cpd-cli manage get-k8s-details \
   [--addonID=<addonID-label>] \
   [--app=<app-label>] \
@@ -381,23 +443,29 @@ cpd-cli manage get-k8s-details \
 ```
 
 ### `get-license`
+
 Get the URL to view the specified software license.
-```
+
+```bash
 cpd-cli manage get-license \
   --release=<version> \
   [--license_types=<EE|SE|...>]
 ```
 
 ### `collect-state`
+
 Capture operational K8s state for IBM Support troubleshooting. Output saved to `collect-state.tar.gz`.
-```
+
+```bash
 cpd-cli manage collect-state \
   [--cpd_instance_ns=<project name>]
 ```
 
 ### `versioninfo`
+
 Get version info about the `olm-utils-play` image, `oc`, `ibm-pak`, and `skopeo`.
-```
+
+```bash
 cpd-cli manage versioninfo
 ```
 
@@ -406,8 +474,10 @@ cpd-cli manage versioninfo
 ## Scaling & HPA
 
 ### `apply-scale-config`
+
 Change scaling configuration for one or more components.
-```
+
+```bash
 cpd-cli manage apply-scale-config \
   --cpd_instance_ns=<project name> \
   [--tethered_ns=<project name>] \
@@ -419,8 +489,10 @@ cpd-cli manage apply-scale-config \
 ```
 
 ### `get-scale-config`
+
 Get current scaling configuration for components.
-```
+
+```bash
 cpd-cli manage get-scale-config \
   --cpd_instance_ns=<project name> \
   [--tethered_ns=<project name>] \
@@ -429,8 +501,10 @@ cpd-cli manage get-scale-config \
 ```
 
 ### `apply-hpa-config`
+
 Enable or disable horizontal pod autoscaling for components.
-```
+
+```bash
 cpd-cli manage apply-hpa-config \
   --cpd_instance_ns=<project name> \
   --components=<comma-separated list> \
@@ -440,8 +514,10 @@ cpd-cli manage apply-hpa-config \
 ```
 
 ### `get-hpa-config`
+
 Get current HPA configuration for components.
-```
+
+```bash
 cpd-cli manage get-hpa-config \
   --cpd_instance_ns=<project name> \
   [--components=<comma-separated list>] \
@@ -449,8 +525,10 @@ cpd-cli manage get-hpa-config \
 ```
 
 ### `apply-cluster-component-scale-config`
+
 Change scaling configuration for a shared cluster component (e.g. `scheduler`).
-```
+
+```bash
 cpd-cli manage apply-cluster-component-scale-config \
   --cluster_component_ns=<project name> \
   --component=<component name> \
@@ -460,8 +538,10 @@ cpd-cli manage apply-cluster-component-scale-config \
 ```
 
 ### `get-cluster-component-scale-config`
+
 Get current scaling configuration for a shared cluster component.
-```
+
+```bash
 cpd-cli manage get-cluster-component-scale-config \
   --cluster_component_ns=<project name> \
   --component=<component name> \
@@ -469,8 +549,10 @@ cpd-cli manage get-cluster-component-scale-config \
 ```
 
 ### `apply-cluster-component-hpa-config`
+
 Enable or disable HPA for a shared cluster component.
-```
+
+```bash
 cpd-cli manage apply-cluster-component-hpa-config \
   --cluster_component_ns=<project name> \
   --component=<component name> \
@@ -480,8 +562,10 @@ cpd-cli manage apply-cluster-component-hpa-config \
 ```
 
 ### `get-cluster-component-hpa-config`
+
 Get HPA configuration for a shared cluster component.
-```
+
+```bash
 cpd-cli manage get-cluster-component-hpa-config \
   --cluster_component_ns=<project name> \
   --component=<component name> \
@@ -493,8 +577,10 @@ cpd-cli manage get-cluster-component-hpa-config \
 ## Image Management
 
 ### `mirror-images`
+
 Mirror images for specified components to a private container registry.
-```
+
+```bash
 cpd-cli manage mirror-images \
   --components=<comma-separated list> \
   --release=<version> \
@@ -516,8 +602,10 @@ cpd-cli manage mirror-images \
 ```
 
 ### `list-images`
+
 Get the list of images associated with specified components. Output saved to `list_images.csv`.
-```
+
+```bash
 cpd-cli manage list-images \
   --release=<version> \
   --components=<comma-separated list> \
@@ -528,8 +616,10 @@ cpd-cli manage list-images \
 ```
 
 ### `delete-images`
+
 Mark images no longer needed for deletion from a registry.
-```
+
+```bash
 cpd-cli manage delete-images \
   --release_to_delete=<version> \
   --release_to_keep=<comma-separated versions> \
@@ -539,31 +629,39 @@ cpd-cli manage delete-images \
 ```
 
 ### `copy-image`
+
 Copy an image from one registry location to another.
-```
+
+```bash
 cpd-cli manage copy-image \
   --from=<source-image-location-and-name> \
   --to=<target-image-location-and-name>
 ```
 
 ### `pull-image`
+
 Pull an image from a registry and load it into the local container runtime.
-```
+
+```bash
 cpd-cli manage pull-image \
   --from=<source-image-location-and-name> \
   [--tag=<target-image-name>]
 ```
 
 ### `save-image`
+
 Save an image as a compressed TAR file in the work directory.
-```
+
+```bash
 cpd-cli manage save-image \
   --from=<source-image-location-and-name>
 ```
 
 ### `load-image`
+
 Load a saved image into the local container runtime.
-```
+
+```bash
 cpd-cli manage load-image \
   --source-image=<source-image-location-and-name> \
   [--tag=<target-image-name>]
@@ -574,8 +672,10 @@ cpd-cli manage load-image \
 ## Licensing & Entitlements
 
 ### `apply-entitlement`
+
 Give the License Service information about purchased licenses.
-```
+
+```bash
 cpd-cli manage apply-entitlement \
   --cpd_instance_ns=<project name> \
   --entitlement=<license-type> \
@@ -590,11 +690,14 @@ cpd-cli manage apply-entitlement \
   [--enforce_pinning=true|false] \
   [--preview=true|false]
 ```
+
 Valid `--entitlement` values include: `cpd-enterprise`, `cpd-standard`, `watsonx-ai`, `watsonx-data`, `watsonx-data-premium`, `watsonx-dataintelligence`, `watsonx-orchestrate`, `watson-assistant`, `datastage`, `datastage-plus`, `ikc-standard`, `ikc-premium`, `watsonx-gov-mm`, `watsonx-gov-rc`, and many more - see `--help` for full list.
 
 ### `remove-entitlement`
+
 Tell the License Service to stop tracking a specific license.
-```
+
+```bash
 cpd-cli manage remove-entitlement \
   --cpd_instance_ns=<project name> \
   --entitlement=<license-type> \
@@ -604,8 +707,10 @@ cpd-cli manage remove-entitlement \
 ```
 
 ### `list-entitlements`
+
 List entitlements present in an instance namespace.
-```
+
+```bash
 cpd-cli manage list-entitlements \
   --cpd_instance_ns=<project name> \
   [--entitlement=<license-type>]
@@ -616,8 +721,10 @@ cpd-cli manage list-entitlements \
 ## Lifecycle: Restart & Shutdown
 
 ### `restart`
+
 Restart components in the specified order (restarts dependencies first if needed).
-```
+
+```bash
 cpd-cli manage restart \
   --components=<comma-separated list> \
   --cpd_instance_ns=<project name> \
@@ -627,8 +734,10 @@ cpd-cli manage restart \
 ```
 
 ### `shutdown`
+
 Shut down components in the specified order.
-```
+
+```bash
 cpd-cli manage shutdown \
   --components=<comma-separated list> \
   --cpd_instance_ns=<project name> \
@@ -640,8 +749,10 @@ cpd-cli manage shutdown \
 ```
 
 ### `restart-container`
+
 Restart the `olm-utils-play` container to ensure the latest image is in use.
-```
+
+```bash
 cpd-cli manage restart-container
 ```
 
@@ -650,8 +761,10 @@ cpd-cli manage restart-container
 ## Tethered Namespaces & Topology
 
 ### `setup-tethered-ns`
+
 Tether a project to the IBM Software Hub control plane project.
-```
+
+```bash
 cpd-cli manage setup-tethered-ns \
   --cpd_instance_ns=<project name> \
   --tethered_instance_ns=<project name> \
@@ -665,8 +778,10 @@ cpd-cli manage setup-tethered-ns \
 ## Proxy Configuration
 
 ### `create-proxy-config`
+
 Create proxy configuration resources for IBM Software Hub.
-```
+
+```bash
 cpd-cli manage create-proxy-config \
   --cpd_instance_ns=<project name> \
   [--proxy_host=<proxy host>] \
@@ -678,32 +793,40 @@ cpd-cli manage create-proxy-config \
 ```
 
 ### `enable-proxy`
+
 Apply an HTTP proxy configuration to an IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage enable-proxy \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `disable-proxy`
+
 Disable the HTTP proxy configuration for an IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage disable-proxy \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `get-proxy-config`
+
 Get proxy configuration details and associated RSI patches.
-```
+
+```bash
 cpd-cli manage get-proxy-config \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `delete-proxy`
+
 Delete RSI patches for HTTP proxy configuration.
-```
+
+```bash
 cpd-cli manage delete-proxy \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
@@ -714,8 +837,10 @@ cpd-cli manage delete-proxy \
 ## RSI (Resource Spec Injection) Patches
 
 ### `create-rsi-patch`
+
 Create or update an RSI patch (env vars, labels, annotations, pod spec).
-```
+
+```bash
 cpd-cli manage create-rsi-patch \
   --cpd_instance_ns=<project name> \
   --patch_name=<patch name> \
@@ -732,16 +857,20 @@ cpd-cli manage create-rsi-patch \
 ```
 
 ### `apply-rsi-patches`
+
 Apply all active RSI patches in a project.
-```
+
+```bash
 cpd-cli manage apply-rsi-patches \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `get-rsi-patch-info`
+
 Get info or status about RSI patches in a project.
-```
+
+```bash
 cpd-cli manage get-rsi-patch-info \
   --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
@@ -749,8 +878,10 @@ cpd-cli manage get-rsi-patch-info \
 ```
 
 ### `get-rsi-patch-logs`
+
 Extract and display logs from the RSI webhook pod.
-```
+
+```bash
 cpd-cli manage get-rsi-patch-logs \
   --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
@@ -758,8 +889,10 @@ cpd-cli manage get-rsi-patch-logs \
 ```
 
 ### `delete-rsi-patch`
+
 Delete one or all RSI patches in a project.
-```
+
+```bash
 cpd-cli manage delete-rsi-patch \
   --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
@@ -771,8 +904,10 @@ cpd-cli manage delete-rsi-patch \
 ## CA Certificates & Admission Controller
 
 ### `install-cpd-config-ac`
+
 Install the IBM Software Hub configuration admission controller (`cpd-config-ac`).
-```
+
+```bash
 cpd-cli manage install-cpd-config-ac \
   --cpd_instance_ns=<project name> \
   [--cpd_config_ac_image=<image location>] \
@@ -782,24 +917,30 @@ cpd-cli manage install-cpd-config-ac \
 ```
 
 ### `enable-cpd-config-ac`
+
 Enable the `cpd-config-ac` webhook. Run after `install-cpd-config-ac`.
-```
+
+```bash
 cpd-cli manage enable-cpd-config-ac \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `uninstall-cpd-config-ac`
+
 Uninstall the admission controller and remove the mutating webhook.
-```
+
+```bash
 cpd-cli manage uninstall-cpd-config-ac \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `gen-platform-ca-certs`
+
 Update the `cpd-platform-ca-certs` secret and inject it into IBM Software Hub pods.
-```
+
+```bash
 cpd-cli manage gen-platform-ca-certs \
   --cpd_instance_ns=<project name> \
   [--apply=true|false] \
@@ -807,16 +948,20 @@ cpd-cli manage gen-platform-ca-certs \
 ```
 
 ### `delete-platform-ca-certs`
+
 Remove the `cpd-platform-ca-certs` secret from pods and delete it.
-```
+
+```bash
 cpd-cli manage delete-platform-ca-certs \
   --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
 ### `list-platform-ca-certs-pods`
+
 List pods injected with `cpd-platform-ca-certs` and pods where injection failed.
-```
+
+```bash
 cpd-cli manage list-platform-ca-certs-pods \
   --cpd_instance_ns=<project name>
 ```
@@ -826,8 +971,10 @@ cpd-cli manage list-platform-ca-certs-pods \
 ## Monitoring & Service Monitors
 
 ### `apply-privileged-monitoring-service`
+
 Deploy the privileged monitoring service for IBM Software Hub.
-```
+
+```bash
 cpd-cli manage apply-privileged-monitoring-service \
   --privileged_service_ns=<project name> \
   --cpd_operator_ns=<project name> \
@@ -838,8 +985,10 @@ cpd-cli manage apply-privileged-monitoring-service \
 ```
 
 ### `delete-privileged-monitoring-service`
+
 Delete the privileged monitoring service.
-```
+
+```bash
 cpd-cli manage delete-privileged-monitoring-service \
   --privileged_service_ns=<project name> \
   --cpd_operator_ns=<project name> \
@@ -848,8 +997,10 @@ cpd-cli manage delete-privileged-monitoring-service \
 ```
 
 ### `apply-service-monitor`
+
 Deploy service monitors for an IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage apply-service-monitor \
   --cpd_instance_ns=<project name> \
   [--image_prefix=<image location>] \
@@ -858,8 +1009,10 @@ cpd-cli manage apply-service-monitor \
 ```
 
 ### `delete-service-monitor`
+
 Remove service monitors installed by `apply-service-monitor`.
-```
+
+```bash
 cpd-cli manage delete-service-monitor \
   --cpd_instance_ns=<project name>
 ```
@@ -869,8 +1022,10 @@ cpd-cli manage delete-service-monitor \
 ## IBM Events / Knative Eventing
 
 ### `deploy-events-operator`
+
 Install or upgrade the IBM Events Operator (required for watsonx Assistant and Orchestrate).
-```
+
+```bash
 cpd-cli manage deploy-events-operator \
   --release=<version> \
   --events_operator_ns=<project name> \
@@ -883,8 +1038,10 @@ cpd-cli manage deploy-events-operator \
 ```
 
 ### `remove-events-operator`
+
 Safely remove the IBM Events Operator, checking for other installations first.
-```
+
+```bash
 cpd-cli manage remove-events-operator \
   --events_operator_ns=<project name> \
   [--force] \
@@ -892,8 +1049,10 @@ cpd-cli manage remove-events-operator \
 ```
 
 ### `deploy-knative-eventing`
+
 Set up Red Hat OpenShift Serverless + Knative Eventing + IBM Events Operator.
-```
+
+```bash
 cpd-cli manage deploy-knative-eventing \
   --release=<version> \
   [--block_storage_class=<RWO storage class>] \
@@ -910,8 +1069,10 @@ cpd-cli manage deploy-knative-eventing \
 ```
 
 ### `remove-knative-eventing`
+
 Remove Knative Eventing and associated resources.
-```
+
+```bash
 cpd-cli manage remove-knative-eventing \
   [--events_operator_ns=<project name>] \
   [--delete_kafka_resources=true|false] \
@@ -927,8 +1088,10 @@ cpd-cli manage remove-knative-eventing \
 ## Physical Locations & Data Planes (Premium)
 
 ### `create-physical-location`
+
 Install IBM Software Hub agents on a remote cluster.
-```
+
+```bash
 cpd-cli manage create-physical-location \
   --physical_location_name=<unique ID> \
   --physical_location_host=<hostname> \
@@ -945,8 +1108,10 @@ cpd-cli manage create-physical-location \
 ```
 
 ### `register-physical-location`
+
 Register a physical location with the primary IBM Software Hub instance.
-```
+
+```bash
 cpd-cli manage register-physical-location \
   --physical_location_name=<unique ID> \
   --display_name=<display name> \
@@ -965,8 +1130,10 @@ cpd-cli manage register-physical-location \
 ```
 
 ### `edit-physical-location`
+
 Edit attributes of a registered physical location.
-```
+
+```bash
 cpd-cli manage edit-physical-location \
   --physical_location_name=<unique ID> \
   --cpd_hub_url=<cpd route> \
@@ -978,8 +1145,10 @@ cpd-cli manage edit-physical-location \
 ```
 
 ### `delete-physical-location`
+
 Remove IBM Software Hub agents from a physical location.
-```
+
+```bash
 cpd-cli manage delete-physical-location \
   --physical_location_name=<unique ID> \
   --management_ns=<project name> \
@@ -988,8 +1157,10 @@ cpd-cli manage delete-physical-location \
 ```
 
 ### `get-physical-locations`
+
 Get information about one or more physical locations.
-```
+
+```bash
 cpd-cli manage get-physical-locations \
   --cpd_hub_url=<cpd route> \
   --cpd_hub_api_key=<base64 encoded API key> \
@@ -999,8 +1170,10 @@ cpd-cli manage get-physical-locations \
 ```
 
 ### `enable-default-data-plane`
+
 Install IBM Software Hub agents on the same cluster for local custom applications.
-```
+
+```bash
 cpd-cli manage enable-default-data-plane \
   --instance_ns=<project name> \
   --management_ns=<project name> \
@@ -1011,8 +1184,10 @@ cpd-cli manage enable-default-data-plane \
 ```
 
 ### `disable-default-data-plane`
+
 Disable the default local data plane.
-```
+
+```bash
 cpd-cli manage disable-default-data-plane \
   --instance_ns=<project name>
 ```
@@ -1022,8 +1197,10 @@ cpd-cli manage disable-default-data-plane \
 ## Custom Applications (Premium)
 
 ### `create-dockerfile-application`
+
 Create an application from a Git repository containing a Dockerfile.
-```
+
+```bash
 cpd-cli manage create-dockerfile-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1050,8 +1227,10 @@ cpd-cli manage create-dockerfile-application \
 ```
 
 ### `create-kube-yaml-application`
+
 Create an application from a compressed tar file of Kubernetes YAML files.
-```
+
+```bash
 cpd-cli manage create-kube-yaml-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1065,8 +1244,10 @@ cpd-cli manage create-kube-yaml-application \
 ```
 
 ### `create-oc-template-application`
+
 Create an application from an OpenShift template tar file.
-```
+
+```bash
 cpd-cli manage create-oc-template-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1080,8 +1261,10 @@ cpd-cli manage create-oc-template-application \
 ```
 
 ### `delete-dockerfile-application`
+
 Delete a Dockerfile-based application by name and run ID.
-```
+
+```bash
 cpd-cli manage delete-dockerfile-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1090,8 +1273,10 @@ cpd-cli manage delete-dockerfile-application \
 ```
 
 ### `delete-kube-yaml-application`
+
 Delete a kubeyaml application by name and run ID.
-```
+
+```bash
 cpd-cli manage delete-kube-yaml-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1101,8 +1286,10 @@ cpd-cli manage delete-kube-yaml-application \
 ```
 
 ### `delete-oc-template-application`
+
 Delete a template application by name and run ID.
-```
+
+```bash
 cpd-cli manage delete-oc-template-application \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1112,16 +1299,20 @@ cpd-cli manage delete-oc-template-application \
 ```
 
 ### `list-custom-applications`
+
 List applications on a data plane.
-```
+
+```bash
 cpd-cli manage list-custom-applications \
   --instance_ns=<project name> \
   [--dataplane_name=<dataplane name>]
 ```
 
 ### `check-custom-application-status`
+
 Get application details and status on a data plane.
-```
+
+```bash
 cpd-cli manage check-custom-application-status \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1130,8 +1321,10 @@ cpd-cli manage check-custom-application-status \
 ```
 
 ### `update-custom-application-proxy-config`
+
 Update proxy configuration for an application.
-```
+
+```bash
 cpd-cli manage update-custom-application-proxy-config \
   --instance_ns=<project name> \
   --app_name=<application name> \
@@ -1146,8 +1339,10 @@ cpd-cli manage update-custom-application-proxy-config \
 ## Premium Features
 
 ### `enable-premium-features`
+
 Enable IBM Software Hub Premium features (Argo CD, AI assistant, physical locations, advanced workload management).
-```
+
+```bash
 cpd-cli manage enable-premium-features \
   --license_acceptance=true|false \
   --features=<argo-cd,ai-assistant,physical-locations,adv-workload-mgr> \
@@ -1157,8 +1352,10 @@ cpd-cli manage enable-premium-features \
 ```
 
 ### `get-premium-feature-status`
+
 Display the status of premium features (enabled or disabled).
-```
+
+```bash
 cpd-cli manage get-premium-feature-status \
   --instance_ns=<project name> \
   [--features=<argo-cd,ai-assistant,physical-locations,adv-workload-mgr>] \
@@ -1167,8 +1364,10 @@ cpd-cli manage get-premium-feature-status \
 ```
 
 ### `create-argo-apps`
+
 Generate Helm-based Argo CD application configurations for IBM Software Hub.
-```
+
+```bash
 cpd-cli manage create-argo-apps \
   --license_acceptance=true|false \
   --release=<version> \
@@ -1198,8 +1397,10 @@ cpd-cli manage create-argo-apps \
 ## NFS & Rook NFS Storage
 
 ### `setup-nfs-provisioner`
+
 Install and configure the Kubernetes NFS-Client Provisioner.
-```
+
+```bash
 cpd-cli manage setup-nfs-provisioner \
   --nfs_server=<NFS server address> \
   [--nfs_provisioner_name=<name>] \
@@ -1211,8 +1412,10 @@ cpd-cli manage setup-nfs-provisioner \
 ```
 
 ### `delete-nfs-provisioner`
+
 Uninstall the Kubernetes NFS-Client Provisioner.
-```
+
+```bash
 cpd-cli manage delete-nfs-provisioner \
   [--nfs_provisioner_name=<name>] \
   [--nfs_provisioner_ns=<project name>] \
@@ -1220,16 +1423,20 @@ cpd-cli manage delete-nfs-provisioner \
 ```
 
 ### `mirror-nfs-provisioner`
+
 Mirror NFS provisioner images to a private container registry.
-```
+
+```bash
 cpd-cli manage mirror-nfs-provisioner \
   [--target_registry=<registry URL>] \
   [--source_registry=<source registry URL>]
 ```
 
 ### `setup-rook-nfs`
+
 Install the rook-nfs provisioner and storage class.
-```
+
+```bash
 cpd-cli manage setup-rook-nfs \
   --block_storage_class=<RWO storage class> \
   [--storage_size=<size in G>] \
@@ -1241,8 +1448,10 @@ cpd-cli manage setup-rook-nfs \
 ```
 
 ### `delete-rook-nfs`
+
 Delete the rook-nfs provisioner installation.
-```
+
+```bash
 cpd-cli manage delete-rook-nfs \
   [--rook_nfs_ns=<project name>] \
   [--rook_nfs_operator_ns=<project name>] \
@@ -1250,8 +1459,10 @@ cpd-cli manage delete-rook-nfs \
 ```
 
 ### `mirror-rook-nfs`
+
 Mirror rook-nfs images for restricted network environments.
-```
+
+```bash
 cpd-cli manage mirror-rook-nfs \
   [--source_registry=<source registry>] \
   [--target_registry=<target registry>]
@@ -1262,8 +1473,10 @@ cpd-cli manage mirror-rook-nfs \
 ## Networking & Routing
 
 ### `setup-route`
+
 Replace TLS certificate, customize hostname, or change route termination type.
-```
+
+```bash
 cpd-cli manage setup-route \
   --cpd_instance_ns=<project name> \
   [--custom_hostname=<hostname>] \
@@ -1277,8 +1490,10 @@ cpd-cli manage setup-route \
 ## IAM & Identity
 
 ### `setup-iam-integration`
+
 Set up the Identity Management service for connecting to an identity provider.
-```
+
+```bash
 cpd-cli manage setup-iam-integration \
   --enable=true \
   --cpd_instance_ns=<project name> \
@@ -1291,8 +1506,10 @@ cpd-cli manage setup-iam-integration \
 ## Watson / App Connect / MCG Setup
 
 ### `setup-appconnect`
+
 Create App Connect resources required by IBM watsonx Orchestrate.
-```
+
+```bash
 cpd-cli manage setup-appconnect \
   --release=<version> \
   --components=watsonx_orchestrate \
@@ -1303,8 +1520,10 @@ cpd-cli manage setup-appconnect \
 ```
 
 ### `setup-mcg`
+
 Create secrets for Watson services to connect to Multicloud Object Gateway.
-```
+
+```bash
 cpd-cli manage setup-mcg \
   --components=<watson_assistant|watson_discovery|watson_speech|watsonx_orchestrate> \
   --cpd_instance_ns=<project name> \
@@ -1319,8 +1538,10 @@ cpd-cli manage setup-mcg \
 ## RBAC & Security
 
 ### `show-minimum-rbac`
+
 Generate minimum RBAC YAML files for components you plan to install.
-```
+
+```bash
 cpd-cli manage show-minimum-rbac \
   --components=<comma-separated list> \
   --release=<version> \
@@ -1337,8 +1558,10 @@ cpd-cli manage show-minimum-rbac \
 ## Configuration
 
 ### `set-config`
+
 Update configuration data in a ConfigMap. Restarts associated pods.
-```
+
+```bash
 cpd-cli manage set-config \
   --cpd_instance_ns=<project name> \
   --configmap_name=<ConfigMap name> \
@@ -1348,7 +1571,9 @@ cpd-cli manage set-config \
 ```
 
 ### `gateway-context-array`
+
 Generate a file mapping route descriptions for RSYSLOG user activity logs.
-```
+
+```bash
 cpd-cli manage gateway-context-array
 ```
