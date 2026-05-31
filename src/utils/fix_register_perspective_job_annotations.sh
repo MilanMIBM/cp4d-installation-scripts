@@ -8,7 +8,7 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/source_env_setup.sh"
+source "${SCRIPT_DIR}/../scripts/source_env_setup.sh"
 
 # ---
 

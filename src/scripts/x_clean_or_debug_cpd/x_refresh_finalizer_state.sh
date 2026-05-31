@@ -10,7 +10,7 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "${SCRIPT_DIR}/../source_env_setup.sh"
 
-eval "${CPDM_OC_LOGIN}"
+eval "${OC_LOGIN}"
 
 #---
 DRY_RUN=true   # Set to false to actually clear finalizers

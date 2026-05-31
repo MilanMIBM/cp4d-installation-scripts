@@ -11,9 +11,3 @@ curl -k -s -X POST "${CPD_URL}/zen-data/v1/addOn/query" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{}' | python3 -c "import sys,json; [print(s['Type'], s.get('State','?')) for s in json.load(sys.stdin)['requestObj']]"
-
-
-# curl -k -s -X POST "${CPD_URL}/zen-data/v1/addOn/query" \
-#   -H "Authorization: Bearer ${TOKEN}" \
-#   -H "Content-Type: application/json" \
-#   -d '{"type": "mongodb"}' | python3 -m json.tool

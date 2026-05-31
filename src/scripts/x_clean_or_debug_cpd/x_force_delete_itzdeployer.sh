@@ -583,7 +583,7 @@ fi
 # system:serviceaccount:cloud-pak-deployer:cpd-sa), plus any namespace
 # whose name contains "cloud-pak-deployer".
 # The requester annotation itself does not block deletion, but the namespace
-# may carry finalizers or terminating resources that do — strip those too.
+# may carry finalizers or terminating resources that do - strip those too.
 # ---------------------------------------------------------------------------
 
 echo ""
@@ -643,7 +643,7 @@ else
             --type='json' -p='[{"op":"replace","path":"/metadata/finalizers","value":[]}]' \
             2>/dev/null || true
 
-        # Clear spec.finalizers via the /finalize subresource — this is the only way to
+        # Clear spec.finalizers via the /finalize subresource - this is the only way to
         # unblock a namespace already stuck in Terminating (oc patch on metadata.finalizers
         # does not touch spec.finalizers, which is what the namespace controller waits on).
         NS_JSON=$(oc get namespace "${CPD_NS}" -o json 2>/dev/null || true)
@@ -657,7 +657,7 @@ else
         oc delete namespace "${CPD_NS}" \
             --grace-period=0 --force --ignore-not-found 2>/dev/null || true
 
-        # Confirm gone — if still present after 10s, re-apply the finalize trick
+        # Confirm gone - if still present after 10s, re-apply the finalize trick
         for _WAIT in 1 2; do
             sleep 5
             NS_PHASE=$(oc get namespace "${CPD_NS}" \

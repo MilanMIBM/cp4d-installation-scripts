@@ -30,7 +30,6 @@ PARAM_FILE_FLAG=()
 if [[ -n "${INSTALL_OPTIONS}" ]]; then
     PARAM_FILE_FLAG=(--param-file="${CPD_CONFIG_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}")
 fi
-    # PARAM_FILE_FLAG=(--param-file="${CPD_CLI_WORK_PATH_CONTAINER}/${INSTALL_OPTIONS_FILE}") - old variant
 
 PATCH_FLAG=()
 if [[ -n "${PATCH_ID}" ]]; then
@@ -52,28 +51,4 @@ cpd-cli manage install-components \
     "${SKIP_COMPONENTS_FLAG[@]}" \
     --upgrade=${UPDATE} \
     "${PATCH_FLAG[@]}"
-
-
-
-# COMPONENTS_TO_INST=(
-#     "analyticsengine"
-#     "factsheet"
-#     "watsonx_data"
-# )
-
-# COMPONENTS_TO_INST_STRING=$(IFS=,; echo "${COMPONENTS_TO_INST[*]}")
-
-# cpd-cli manage install-components \
-#     --license_acceptance=true \
-#     --components=${COMPONENTS_TO_INST_STRING} \
-#     --release=${VERSION} \
-#     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-#     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
-#     --block_storage_class=${STG_CLASS_BLOCK} \
-#     --file_storage_class=${STG_CLASS_FILE} \
-#     --image_pull_prefix=${IMAGE_PULL_PREFIX} \
-#     --image_pull_secret=${IMAGE_PULL_SECRET} \
-#     "${PARAM_FILE_FLAG[@]}" \
-#     "${SKIP_COMPONENTS_FLAG[@]}" \
-#     --upgrade=${UPDATE} \
-#     "${PATCH_FLAG[@]}"
+    

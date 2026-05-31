@@ -18,7 +18,8 @@ COMPONENT_LIST=(
     "factsheet"
 )
 
-COMPONENT_LIST_STRING=$(IFS=,; echo "${COMPONENT_LIST[*]}")
+COMPONENT_LIST_STRING=$(IFS=,; echo "${COMPONENT_LIST[*]}") # Swap with option below to do it for all service related components
+# COMPONENT_LIST_STRING="${CPD_COMPONENTS}"
 
 echo "[INFO] Restarting components: ${COMPONENT_LIST_STRING} in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage restart \

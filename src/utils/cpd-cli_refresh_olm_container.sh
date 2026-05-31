@@ -8,9 +8,17 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/source_env_setup.sh"
+source "${SCRIPT_DIR}/../scripts/source_env_setup.sh"
 
 #---
+
+for var in OLM_UTILS_IMAGE CPD_CLI_WORK_PATH; do
+    if [[ -z "${(P)var:-}" ]]; then
+        echo "[ERROR] ${var} is not set. Set it in ./cpd_vars.sh before running this script."
+        exit 1
+    fi
+done
+
 CONTAINER_NAME="olm-utils-play-v4"
 
 if [[ -d "${CPD_CLI_WORK_PATH}" ]]; then
@@ -28,7 +36,8 @@ else
     echo "[INFO] No existing container found: ${CONTAINER_NAME}"
 fi
 
-echo "[INFO] Pulling latest olm-utils image for release ${VERSION:-latest}"
-podman pull --arch=amd64 "icr.io/cpopen/cpd/olm-utils-v4:${VERSION:-latest}"
+echo "[INFO] Pulling olm-utils image: ${OLM_UTILS_IMAGE}"
+podman pull --arch="${IMAGE_ARCH:-amd64}" "${OLM_UTILS_IMAGE}"
 
 echo "[INFO] Container and workspace cleaned. Run your cpd-cli manage command to start fresh."
+echo "[INFO] Image pulled: ${OLM_UTILS_IMAGE}"

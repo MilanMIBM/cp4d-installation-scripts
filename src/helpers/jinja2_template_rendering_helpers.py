@@ -58,10 +58,10 @@ def render_template_from_environment(
     """Render a Jinja2 template against all variables currently in scope.
 
     Variable priority (highest wins):
-      1. extra_vars (explicit overrides)
-      2. Caller's locals/globals from every frame in the call stack
-         (captures marimo widget objects and any other in-memory state)
-      3. os.environ
+        1. extra_vars (explicit overrides)
+        2. Caller's locals/globals from every frame in the call stack
+            (captures marimo widget objects and any other in-memory state)
+        3. os.environ
 
     Accepts either a path to a template file or raw template text.
     When print_missing=True, any unresolved template variables are printed.

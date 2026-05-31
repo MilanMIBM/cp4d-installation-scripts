@@ -28,7 +28,7 @@ COMPONENT_LIST=(
 )
 
 # COMPONENT_LIST_STRING=$(IFS=,; echo "${COMPONENT_LIST[*]}")
-COMPONENT_LIST_STRING="cpfs,cpd_platform,ccs,${CPD_COMPONENTS}"
+COMPONENT_LIST_STRING="cpfs,cpd_platform,ccs,${CPD_COMPONENTS}" # swap out with the above version for local variant of the components list.
 
 FILTER_FIELDS=(
     "cr_kind"

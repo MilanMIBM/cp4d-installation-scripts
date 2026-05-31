@@ -223,7 +223,6 @@ cpd-file.txt
 cpdaddons.yml
 db2-tls.crt
 edb-tls.crt
-s_env.sh
 src/helpers/cpd_variable_template\[backup\].sh.j2
 planning-analytics-instance.json
 old_cp4d_configs/cpd_vars.sh

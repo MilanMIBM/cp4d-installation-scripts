@@ -74,10 +74,6 @@ oc delete -f ${CPD_CLI_WORK_PATH}/cluster_scoped_resources_uninstall_list.yaml
 fi
 
 #---
-# echo "[INFO] Deleting remaining CPD projects"
-# "${SCRIPT_DIR}/x_delete_cpd_projects.sh"
-
-#---
 cpd-cli manage restart-container
 
 #---

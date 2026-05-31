@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.8"
 app = marimo.App(
     width="full",
     app_title="Cloud Pak For Data - Setup Config Generator",
@@ -320,9 +320,9 @@ def _(
 
 
 @app.cell
-def _(run_button, save_to_config_dir_button):
+def _(run_button):
     mo.hstack(
-        [run_button, save_to_config_dir_button],
+        [run_button],
         justify="center",
         gap=20,
     )
@@ -765,7 +765,7 @@ def _():
 @app.cell
 def _():
     save_to_config_dir_button = mo.ui.run_button(
-        label="**Save to ./cp4d_config/**", kind="warn"
+        label="**Save directly to ./cp4d_config/**", kind="neutral"
     )
     return (save_to_config_dir_button,)
 
@@ -799,7 +799,11 @@ def _(rendered_variables_file_cpd):
 @app.cell
 def _(cpd_vars_template_editor, inst_options_template_editor, save_file_stack):
     config_stack_cpd = mo.vstack(
-        [cpd_vars_template_editor, inst_options_template_editor, save_file_stack]
+        [
+            cpd_vars_template_editor,
+            inst_options_template_editor,
+            save_file_stack,
+        ]
     )
     return (config_stack_cpd,)
 
@@ -845,10 +849,21 @@ def _(cpd_vars_filename, cpd_vars_template_editor):
 
 
 @app.cell
-def _(name_variable_file_cpd, save_config_cpd, save_config_inst_options):
+def _(
+    name_variable_file_cpd,
+    save_config_cpd,
+    save_config_inst_options,
+    save_to_config_dir_button,
+):
     save_file_stack = mo.hstack(
-        [name_variable_file_cpd, save_config_cpd, save_config_inst_options],
+        [
+            name_variable_file_cpd,
+            save_config_cpd,
+            save_config_inst_options,
+            save_to_config_dir_button,
+        ],
         justify="space-around",
+        align="center",
         gap=15,
     )
     return (save_file_stack,)
