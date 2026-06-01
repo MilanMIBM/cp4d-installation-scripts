@@ -251,3 +251,8 @@ db2oltp.yaml
 src/scripts/2_prepare_cluster/2.0-2.1_preliminary_setup/\[OLD\]2.0.3_preliminary_secrets_setup.sh
 t.json
 src/scripts/5_component_specific_scripts/\[OLD\]5_prep_wxd_opensearch.sh
+*.crt
+service_instances/service_instance_certs/*
+src/scripts/5_component_specific_scripts/5.5_wxdata_connectors/5.5_wxdata_informic_cp4d_connector.sh
+src/scripts/x_clean_or_debug_cpd/x_fix_cpdctl_config_format.sh
+src/scripts/x_clean_or_debug_cpd/x_fix_cpdctl_config_format_to_run_cpd-cli-wxdata-cmds.sh

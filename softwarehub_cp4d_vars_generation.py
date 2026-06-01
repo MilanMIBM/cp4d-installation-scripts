@@ -33,19 +33,19 @@ def _():
         default_private_registry_setup,
         image_group_id_records,
     )
-    from src.helpers.marimo_sortablekv import SortableKV
+    from src.helpers.marimo_sortablekv import sortable_kv
     from src.helpers.jinja2_template_rendering_helpers import (
         render_template_from_environment,
     )
 
     return (
-        SortableKV,
         cp4d_component_id_records,
         cp4d_license_entitlement_id_records,
         default_private_registry_setup,
         default_project_naming_conventions,
         image_group_id_records,
         render_template_from_environment,
+        sortable_kv,
     )
 
 
@@ -63,16 +63,14 @@ def _():
 
 
 @app.cell
-def _(SortableKV, default_project_naming_conventions):
-    cp4d_install_project_naming_records = mo.ui.anywidget(
-        SortableKV(
-            label="Project Naming Specs:",
-            value=default_project_naming_conventions,
-            addable=False,
-            removable=False,
-            editable=True,
-            movable=False,
-        )
+def _(default_project_naming_conventions, sortable_kv):
+    cp4d_install_project_naming_records = sortable_kv(
+        label="Project Naming Specs:",
+        value=default_project_naming_conventions,
+        addable=False,
+        removable=False,
+        editable=True,
+        movable=False,
     )
 
     # cp4d_install_project_naming_records
@@ -89,16 +87,14 @@ def _(cp4d_install_project_naming_records):
 
 
 @app.cell
-def _(SortableKV, default_private_registry_setup):
-    cp4d_private_registry_naming_records = mo.ui.anywidget(
-        SortableKV(
-            label="If you are using a private registry:",
-            value=default_private_registry_setup,
-            addable=False,
-            removable=False,
-            editable=True,
-            movable=False,
-        )
+def _(default_private_registry_setup, sortable_kv):
+    cp4d_private_registry_naming_records = sortable_kv(
+        label="If you are using a private registry:",
+        value=default_private_registry_setup,
+        addable=False,
+        removable=False,
+        editable=True,
+        movable=False,
     )
 
     # cp4d_private_registry_naming_records
@@ -176,15 +172,6 @@ def _():
         stg_class_block_options,
         stg_class_file_options,
     )
-
-
-@app.cell
-def _():
-    oc_login_cmd = "oc login ${SERVER_ARGUMENTS} ${LOGIN_ARGUMENTS}"
-    cpd_oc_login_cmd = (
-        "cpd-cli manage login-to-ocp ${SERVER_ARGUMENTS} ${LOGIN_ARGUMENTS}"
-    )
-    return
 
 
 @app.cell
