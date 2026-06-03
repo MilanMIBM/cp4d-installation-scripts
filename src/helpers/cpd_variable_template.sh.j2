@@ -85,7 +85,7 @@ export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"{% endif %}
 
 export VERSION="{{ cp4d_version_input.value }}"
 export PATCH_ID="" # "5" - Current patch as of 21.05.2026
-export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) or jsut use "latest"
+export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
 # ------------------------------------------------------------------------------
@@ -118,3 +118,4 @@ export LICENSE_ENTITLEMENTS="{{ entitlements_to_apply_str }}"
 {% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') %}export PREP_DATASTAX="true"{% endif %}
 {% if 'planning_analytics' in components_to_install_str.split(',') %}export PREP_PA="true"{% endif %}
 {% if 'cognos_analytics' in components_to_install_str.split(',') %}export PREP_CA="true"{% endif %}
+{% if 'watsonx_orchestrate' in components_to_install_str.split(',') %}export PREP_WXO="true"{% endif %}

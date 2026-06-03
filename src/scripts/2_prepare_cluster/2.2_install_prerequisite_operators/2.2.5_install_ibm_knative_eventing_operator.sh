@@ -8,7 +8,10 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/../../source_env_setup.sh"
+# (legacy hardcoded sourcing - replaced by universal crawl below)
+# source "${SCRIPT_DIR}/../../source_env_setup.sh"
+# --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
+_b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 
 [[ -n "${PROJECT_IBM_EVENTS}" ]] || { echo "[INFO] PROJECT_IBM_EVENTS is not set - skipping IBM Knative Eventing install."; exit 0; }
 
@@ -25,7 +28,7 @@ fi
 
 # ---
 # Set CASE_DOWNLOAD_FROM to one of: github | oci
-CASE_DOWNLOAD_FROM="github"
+CASE_DOWNLOAD_FROM="oci"
 # ---
 
 TIMEOUT=300

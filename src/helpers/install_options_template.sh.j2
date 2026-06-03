@@ -2,7 +2,7 @@
 # IBM Software Hub install-options.yml
 # Generated based on selected components
 ################################################################################
-{% if "analyticsengine" in components_to_install %}
+{% if "analyticsengine" or "watsonx_data" or "watsonx_data_premium" in components_to_install %}
 ---
 # ............................................................................
 # Analytics Engine powered by Apache Spark parameters
@@ -424,4 +424,15 @@ non_olm:
       watsonxaiifm: false # Use remote models, if true requires GPUs for on-prem deployment.
       syomModels: []
       # ootbModels: [ibm-slate-30m-english-rtrvr] this model is required if you set watsonxaiifm to true.
+{% endif %}
+{% if "dv" or "dmc" in components_to_install %}
+---
+# ............................................................................
+# Db2 Managmenet Console
+# Verison and Storage Size Controls
+# ............................................................................
+non_olm:
+  Dmcaddon:
+    version: 5.3.1
+    storageSize: 20Gi
 {% endif %}

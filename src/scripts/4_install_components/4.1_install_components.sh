@@ -8,7 +8,10 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/../source_env_setup.sh"
+# (legacy hardcoded sourcing - replaced by universal crawl below)
+# source "${SCRIPT_DIR}/../source_env_setup.sh"
+# --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
+_b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 
 # ---
 
@@ -36,10 +39,12 @@ if [[ -n "${PATCH_ID}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
+COMPONENTS=${COMPLETE_COMPONENT_LIST}
+# COMPONENTS=${CPD_COMPONENTS}
 
 cpd-cli manage install-components \
     --license_acceptance=true \
-    --components=${CPD_COMPONENTS} \
+    --components=${COMPONENTS} \
     --release=${VERSION} \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \

@@ -10,7 +10,10 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/../source_env_setup.sh"
+# (legacy hardcoded sourcing - replaced by universal crawl below)
+# source "${SCRIPT_DIR}/../source_env_setup.sh"
+# --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
+_b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 
 # ---
 
@@ -87,6 +90,60 @@ if [[ -z "${INFORMIX_DMC_ADMINPWD}" || -z "${INFORMIX_APP_USER}" || -z "${INFORM
 fi
 
 # ---
+# Retrieve Informix connection ports (Connection Manager + Wire Listener)
+
+RETRIEVE_ALL_INFORMIX_PORTS=true
+
+INFORMIX_HOST_CM="" INFORMIX_PORT_CM_SQLI="" INFORMIX_PORT_CM_DRDA=""
+INFORMIX_HOST_WL="" INFORMIX_PORT_WL_REST="" INFORMIX_PORT_WL_MONGO="" INFORMIX_PORT_WL_MQTT=""
+
+if [[ "${RETRIEVE_ALL_INFORMIX_PORTS}" == true ]]; then
+    echo "[INFO] Retrieving Informix connection hosts and ports..."
+
+    _CM_SVC="${INFORMIX_INSTANCE}-cm-service"
+    _WL_SVC="${INFORMIX_INSTANCE}-wlistener-service"
+
+    # Traffic enters via the HAProxy infra node; clients connect to the infra node, not directly to workers.
+    # Priority: infra node ExternalDNS → ExternalIP → Hostname → fall back to any worker Hostname.
+    _NODE_HOST="$(oc get nodes -l node-role.kubernetes.io/infra \
+        -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalDNS")].address}' 2>/dev/null || true)"
+    [[ -z "${_NODE_HOST}" ]] && _NODE_HOST="$(oc get nodes -l node-role.kubernetes.io/infra \
+        -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' 2>/dev/null || true)"
+    [[ -z "${_NODE_HOST}" ]] && _NODE_HOST="$(oc get nodes -l node-role.kubernetes.io/infra \
+        -o jsonpath='{.items[0].status.addresses[?(@.type=="Hostname")].address}' 2>/dev/null || true)"
+    [[ -z "${_NODE_HOST}" ]] && _NODE_HOST="$(oc get nodes -l node-role.kubernetes.io/worker \
+        -o jsonpath='{.items[0].status.addresses[?(@.type=="Hostname")].address}' 2>/dev/null || true)"
+
+    _cm_exists="$(oc get service "${_CM_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" --ignore-not-found \
+        -o jsonpath='{.metadata.name}' 2>/dev/null || true)"
+    if [[ -n "${_cm_exists}" ]]; then
+        INFORMIX_HOST_CM="${_NODE_HOST}"
+        INFORMIX_PORT_CM_SQLI="$(oc get service "${_CM_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.spec.ports[?(@.name=="oltpanytls")].nodePort}' 2>/dev/null || true)"
+        INFORMIX_PORT_CM_DRDA="$(oc get service "${_CM_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.spec.ports[?(@.name=="oltpdrdaanytls")].nodePort}' 2>/dev/null || true)"
+        echo "[OK] Connection Manager - host: ${INFORMIX_HOST_CM:-n/a}, SQLI port (oltpanytls): ${INFORMIX_PORT_CM_SQLI:-n/a}, DRDA port (oltpdrdaanytls): ${INFORMIX_PORT_CM_DRDA:-n/a}"
+    else
+        echo "[WARN] Connection Manager service '${_CM_SVC}' not found; skipping." >&2
+    fi
+
+    _wl_exists="$(oc get service "${_WL_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" --ignore-not-found \
+        -o jsonpath='{.metadata.name}' 2>/dev/null || true)"
+    if [[ -n "${_wl_exists}" ]]; then
+        INFORMIX_HOST_WL="${_NODE_HOST}"
+        INFORMIX_PORT_WL_REST="$(oc get service "${_WL_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.spec.ports[?(@.name=="wlresttlsport")].nodePort}' 2>/dev/null || true)"
+        INFORMIX_PORT_WL_MONGO="$(oc get service "${_WL_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.spec.ports[?(@.name=="wlmongotlsport")].nodePort}' 2>/dev/null || true)"
+        INFORMIX_PORT_WL_MQTT="$(oc get service "${_WL_SVC}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.spec.ports[?(@.name=="wlmqtttlsport")].nodePort}' 2>/dev/null || true)"
+        echo "[OK] Wire Listener - host: ${INFORMIX_HOST_WL:-n/a}, REST port (wlresttlsport): ${INFORMIX_PORT_WL_REST:-n/a}, Mongo port (wlmongotlsport): ${INFORMIX_PORT_WL_MONGO:-n/a}, MQTT port (wlmqtttlsport): ${INFORMIX_PORT_WL_MQTT:-n/a}"
+    else
+        echo "[WARN] Wire Listener service '${_WL_SVC}' not found; skipping." >&2
+    fi
+fi
+
+# ---
 # Write credentials to cpd_instance_details.sh
 
 REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
@@ -101,7 +158,16 @@ export INFORMIX_DMC_USERNAME=\"admin\"
 export INFORMIX_DMC_PASSWORD=\"${INFORMIX_DMC_ADMINPWD}\"
 #--- Informix app-level DB user
 export INFORMIX_APP_USERNAME=\"${INFORMIX_APP_USER}\"
-export INFORMIX_APP_PASSWORD=\"${INFORMIX_APP_PASSWORD}\""
+export INFORMIX_APP_PASSWORD=\"${INFORMIX_APP_PASSWORD}\"
+#--- Informix connection host + ports (Connection Manager)
+export INFORMIX_HOST_CM=\"${INFORMIX_HOST_CM}\"
+export INFORMIX_PORT_CM_SQLI=\"${INFORMIX_PORT_CM_SQLI}\"
+export INFORMIX_PORT_CM_DRDA=\"${INFORMIX_PORT_CM_DRDA}\"
+#--- Informix connection host + ports (Wire Listener)
+export INFORMIX_HOST_WL=\"${INFORMIX_HOST_WL}\"
+export INFORMIX_PORT_WL_REST=\"${INFORMIX_PORT_WL_REST}\"
+export INFORMIX_PORT_WL_MONGO=\"${INFORMIX_PORT_WL_MONGO}\"
+export INFORMIX_PORT_WL_MQTT=\"${INFORMIX_PORT_WL_MQTT}\""
 
 if [[ -f "${VARS_FILE}" ]]; then
     echo "${INFORMIX_BLOCK}" >> "${VARS_FILE}"

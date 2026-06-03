@@ -69,7 +69,7 @@ export IMAGE_PULL_PREFIX="icr.io"
 
 export VERSION="5.3.1"
 export PATCH_ID="5" # "5" - Current patch as of 21.05.2026
-export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) or jsut use "latest"
+export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
 export CPD_ADMIN_USERNAME="cpadmin"
 
 # ------------------------------------------------------------------------------

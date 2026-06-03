@@ -9,15 +9,18 @@ trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECOND
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # (legacy hardcoded sourcing - replaced by universal crawl below)
-# source "${SCRIPT_DIR}/../../source_env_setup.sh"
+# source "${SCRIPT_DIR}/../source_env_setup.sh"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-"${CURRENT_DIR}/2.2.1_install_nvidia_node_discovery.sh"
-"${CURRENT_DIR}/2.2.2_install_nvidia_gpu_operator.sh"
-"${CURRENT_DIR}/2.2.3_install_openshift_ai_operator.sh"
-if [[ "${PREP_WXO:-}" == "true" ]]; then
-    "${CURRENT_DIR}/2.2.4_install_multicloud_object_gateway_operator.sh"
-fi
-"${CURRENT_DIR}/2.2.5_install_ibm_knative_eventing_operator.sh"
+
+export INSTALL_MODE=agentic
+export INTERNAL_IFM=false
+
+sh src/scripts/x_clean_or_debug_cpd/wxo-prereq-check.sh \
+    --version ${VERSION}\
+    --installation-type $INSTALL_MODE \
+    --internal-ifm $INTERNAL_IFM \
+    --operator-ns ${PROJECT_CPD_INST_OPERATORS} \
+    --operand-ns ${PROJECT_CPD_INST_OPERANDS}

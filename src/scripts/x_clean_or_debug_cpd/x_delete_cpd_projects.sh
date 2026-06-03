@@ -8,7 +8,10 @@ SECONDS=0
 trap '(( SECONDS >= 60 )) && echo "[TIMER] $(basename $0) completed in $((SECONDS/60))m $((SECONDS%60))s" || echo "[TIMER] $(basename $0) completed in ${SECONDS}s"' EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-source "${SCRIPT_DIR}/../source_env_setup.sh"
+# (legacy hardcoded sourcing - replaced by universal crawl below)
+# source "${SCRIPT_DIR}/../source_env_setup.sh"
+# --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
+_b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 
 # --- Options
 PREVIEW=false
@@ -130,21 +133,53 @@ if [[ ${#EXISTS[@]} -eq 0 ]]; then
     exit 0
 fi
 
+# Kill the namespace's own "kubernetes" finalizer via the /finalize subresource.
+# A plain `oc patch namespace ... spec.finalizers` is silently ignored by the API
+# server for this finalizer - it is only honoured through the finalize subresource.
+kill_namespace_finalizer() {
+    local ns="$1"
+    local token server
+    token=$(oc whoami -t 2>/dev/null || true)
+    server=$(oc whoami --show-server 2>/dev/null || true)
+
+    # Grab the live namespace object, strip spec.finalizers, PUT to /finalize.
+    local body
+    body=$(oc get namespace "${ns}" -o json 2>/dev/null \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); d.get('spec',{}).pop('finalizers',None); print(json.dumps(d))" 2>/dev/null || true)
+    [[ -z "${body}" ]] && return 0
+
+    if [[ -n "${token}" && -n "${server}" ]]; then
+        curl -sk -X PUT \
+            -H "Authorization: Bearer ${token}" \
+            -H "Content-Type: application/json" \
+            --data "${body}" \
+            "${server}/api/v1/namespaces/${ns}/finalize" &>/dev/null || true
+    else
+        # Fallback: oc replace against the finalize subresource via raw API.
+        echo "${body}" | oc replace --raw "/api/v1/namespaces/${ns}/finalize" -f - &>/dev/null || true
+    fi
+}
+
 force_delete_project() {
     local ns="$1"
     local cur="$2"
     local total="$3"
 
     echo -e "\n  ${BOLD}[${cur}/${total}]${RESET} Deleting ${BOLD}${ns}${RESET}"
+
+    # Drop the openshift.io/requester annotation so the project can't be
+    # re-reconciled/blocked on the basis of its original requester.
+    oc annotate namespace "${ns}" openshift.io/requester- --overwrite &>/dev/null || true
+
     oc delete project "${ns}" --wait=false --ignore-not-found=true
 
     local deadline=$(( SECONDS + DELETE_TIMEOUT ))
     spin_until_gone "${ns}" "${deadline}"
 
     if oc get namespace "${ns}" &>/dev/null; then
-        warn "Project '${BOLD}${ns}${RESET}' stuck - removing finalizers."
-        oc patch namespace "${ns}" --type=merge -p '{"spec":{"finalizers":[]}}' &>/dev/null
+        warn "Project '${BOLD}${ns}${RESET}' stuck - tracking down finalizers."
 
+        # 1. Find and clear per-resource finalizers, reporting what's holding the ns.
         local resources
         resources=$(oc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
         local res_count
@@ -153,14 +188,43 @@ force_delete_project() {
 
         for resource in ${resources}; do
             (( res_idx++ )) || true
-            progress_bar "${res_idx}" "${res_count}" "Patching ${resource}"
-            oc get "${resource}" -n "${ns}" -o name 2>/dev/null \
-                | xargs -r -I{} oc patch {} -n "${ns}" \
-                    --type=merge -p '{"metadata":{"finalizers":[]}}' 2>/dev/null || true
+            progress_bar "${res_idx}" "${res_count}" "Scanning ${resource}"
+
+            # Names of objects of this type that still carry finalizers.
+            local stuck
+            stuck=$(oc get "${resource}" -n "${ns}" -o json 2>/dev/null \
+                | python3 -c "import sys,json
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(0)
+for it in d.get('items',[]):
+    f=it.get('metadata',{}).get('finalizers',[])
+    if f: print(it['metadata']['name'], ','.join(f))" 2>/dev/null || true)
+
+            [[ -z "${stuck}" ]] && continue
+
+            printf "\r\033[2K"
+            while IFS=' ' read -r name fins; do
+                [[ -z "${name}" ]] && continue
+                warn "  ${resource}/${name}  ${DIM}[${fins}]${RESET}"
+                oc patch "${resource}" "${name}" -n "${ns}" \
+                    --type=merge -p '{"metadata":{"finalizers":[]}}' &>/dev/null \
+                    && success "    cleared finalizers on ${resource}/${name}" \
+                    || warn "    failed to clear ${resource}/${name}"
+            done <<< "${stuck}"
         done
         printf "\r\033[2K"
 
-        oc patch namespace "${ns}" --type=merge -p '{"metadata":{"finalizers":[]}}' &>/dev/null
+        # 2. Kill the namespace's own finalizers (metadata + the kubernetes spec finalizer).
+        oc patch namespace "${ns}" --type=merge -p '{"metadata":{"finalizers":[]}}' &>/dev/null || true
+        kill_namespace_finalizer "${ns}"
+
+        # 3. Give the API server a moment, then confirm.
+        local fdeadline=$(( SECONDS + DELETE_TIMEOUT ))
+        spin_until_gone "${ns}" "${fdeadline}"
+        if oc get namespace "${ns}" &>/dev/null; then
+            warn "Project '${BOLD}${ns}${RESET}' still present after clearing finalizers - inspect manually."
+            return 0
+        fi
     fi
 
     success "Project '${BOLD}${ns}${RESET}' deleted."
