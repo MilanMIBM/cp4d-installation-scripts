@@ -725,19 +725,36 @@ db2wh:
   method: ibm-sales-sizing
   component: db2wh
   scale: ""               # informational only
-{% endif %}
-
+{% endif %}{% if "cpd_platform" in components_to_install and scale_concurrent_zen_users.value == true %}
 # ==============================================================================
-# Not supported: these selected services do not support manual scaling.
-#   Listed here only as a reminder; the apply script should skip them.
-#     EDB Postgres, IBM StreamSets, MongoDB, RStudio Server Runtimes,
-#     Watson Studio Runtimes, watsonx BI, watsonx.data integration
+# Concurrent users: nginx worker connections  (zen control-plane gateway)
+#   Increase the number of simultaneous connections for the nginx worker
+#   processes when you have a large number of concurrent users, or when the
+#   ibm-nginx pod logs show "worker_connections are not enough":
+#     oc logs -n ${PROJECT_CPD_INST_OPERANDS} -l=component=ibm-nginx \
+#       | grep "worker_connections are not enough"
+#
+#   The zen scale level sets a DEFAULT number of nginx worker connections:
+#     level_1 (small_mincpureq) -> 1024   level_2 (small)  -> 2048
+#     level_3 (medium)          -> 5120   level_4 (large)  -> 10240
+#     level_5 (large)           -> 10240
+#   Check the current zen scaling configuration with:
+#     cpd-cli manage get-scale-config \
+#       --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} --components=zen
+#
+#   Override the default by patching the zenservice lite-cr custom resource:
+#     export WORKER_CONNECTIONS=<number-of-connections>
+#     oc patch zenservice lite-cr \
+#       --namespace=${PROJECT_CPD_INST_OPERANDS} \
+#       --type=merge \
+#       --patch="{\"spec\":{\"gatewayWorkerConnections\": \"${WORKER_CONNECTIONS}\"}}"
+#   Set worker_connections below to a number to apply the override, or leave
+#   empty ("") to keep the default tied to the zen scale level.
 # ==============================================================================
-{% if "edb_cp4d" in components_to_install or "edb_postgres" in components_to_install %}# edb_postgres: scaling not supported
-{% endif %}{% if "streamsets" in components_to_install %}# streamsets: scaling not supported
-{% endif %}{% if "mongodb" in components_to_install or "mongodb_cp4d" in components_to_install %}# mongodb: scaling not supported
-{% endif %}{% if "rstudio" in components_to_install %}# rstudio: scaling not supported
-{% endif %}{% if "ws_runtimes" in components_to_install %}# ws_runtimes: scaling not supported (runtimes start with requested resources)
-{% endif %}{% if "watsonx_bi_assistant" in components_to_install %}# watsonx_bi_assistant: scaling not supported
-{% endif %}{% if "watsonx_dataintegration" in components_to_install %}# watsonx_dataintegration: scaling not supported
+---
+zen_nginx_worker_connections:
+  method: oc-patch-zenservice
+  component: zenservice
+  cr_name: lite-cr
+  worker_connections: 2048    # nginx gateway worker connections (level_2 default); empty "" = use zen scale-level default
 {% endif %}
