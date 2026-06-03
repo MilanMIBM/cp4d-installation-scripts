@@ -22,12 +22,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export OCP_URL="{{ cluster_url_input.value }}"
 export OPENSHIFT_TYPE="{{ cluster_type_select.value }}"
 export IMAGE_ARCH="{{ cluster_arch_select.value }}"
-{% if login_argument_select.selected_key == "Username/Password" %}
+{% if login_argument_select.selected_key == "Username/Password" -%}
 export OCP_USERNAME="{{ cluster_username_input.value }}"
 export OCP_PASSWORD="{{ cluster_password_input.value }}"
-export LOGIN_ARGUMENTS="--username=${OCP_USERNAME} --password=${OCP_PASSWORD}"{% elif login_argument_select.selected_key == "Token" %}
+export LOGIN_ARGUMENTS="--username=${OCP_USERNAME} --password=${OCP_PASSWORD}"
+{% elif login_argument_select.selected_key == "Token" -%}
 export OCP_TOKEN="{{ cluster_token_input.value }}"
-export LOGIN_ARGUMENTS="--token=${OCP_TOKEN}"{% endif %}
+export LOGIN_ARGUMENTS="--token=${OCP_TOKEN}"
+{% endif -%}
 
 export SERVER_ARGUMENTS="--server=${OCP_URL}"
 export OC_LOGIN="oc login ${SERVER_ARGUMENTS} ${LOGIN_ARGUMENTS}"
@@ -38,9 +40,13 @@ export CPDM_OC_LOGIN="cpd-cli manage login-to-ocp ${SERVER_ARGUMENTS} ${LOGIN_AR
 # ------------------------------------------------------------------------------
 
 export PROJECT_LICENSE_SERVICE="{{ cp4d_install_project_naming.get("PROJECT_LICENSE_SERVICE") }}"
-export PROJECT_SCHEDULING_SERVICE="{{ cp4d_install_project_naming.get("PROJECT_SCHEDULING_SERVICE") }}"{% if cp4d_install_project_naming.get("PROJECT_IBM_EVENTS") %}
-export PROJECT_IBM_EVENTS="{{ cp4d_install_project_naming.get("PROJECT_IBM_EVENTS") }}"{% endif %}{% if cp4d_install_project_naming.get("PROJECT_PRIVILEGED_MONITORING_SERVICE") %}
-export PROJECT_PRIVILEGED_MONITORING_SERVICE="{{ cp4d_install_project_naming.get("PROJECT_PRIVILEGED_MONITORING_SERVICE") }}"{% endif %}
+export PROJECT_SCHEDULING_SERVICE="{{ cp4d_install_project_naming.get("PROJECT_SCHEDULING_SERVICE") }}"
+{% if cp4d_install_project_naming.get("PROJECT_IBM_EVENTS") -%}
+export PROJECT_IBM_EVENTS="{{ cp4d_install_project_naming.get("PROJECT_IBM_EVENTS") }}"
+{% endif -%}
+{% if cp4d_install_project_naming.get("PROJECT_PRIVILEGED_MONITORING_SERVICE") -%}
+export PROJECT_PRIVILEGED_MONITORING_SERVICE="{{ cp4d_install_project_naming.get("PROJECT_PRIVILEGED_MONITORING_SERVICE") }}"
+{% endif -%}
 export PROJECT_CPD_INST_OPERATORS="{{ cp4d_install_project_naming.get("PROJECT_CPD_INST_OPERATORS") }}"
 export PROJECT_CPD_INST_OPERANDS="{{ cp4d_install_project_naming.get("PROJECT_CPD_INST_OPERANDS") }}"
 
@@ -50,13 +56,13 @@ export PROJECT_CPD_INST_OPERANDS="{{ cp4d_install_project_naming.get("PROJECT_CP
 
 export STG_CLASS_BLOCK="{{ block_storage_class_select.value }}"
 export STG_CLASS_FILE="{{ file_storage_class_select.value }}"
-{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" %}
+{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" -%}
 # ------------------------------------------------------------------------------
 # IBM Entitled Registry Key
 # ------------------------------------------------------------------------------
 
 export IBM_ENTITLEMENT_KEY="{{ ibm_entitlement_key_input.value }}"
-{% endif %}{% if image_pull_creds_select.selected_key != "IBM Entitled Registry" %}
+{% else -%}
 # ------------------------------------------------------------------------------
 # Private container registry
 # ------------------------------------------------------------------------------
@@ -66,18 +72,22 @@ export PRIVATE_REGISTRY_PUSH_USER="{{ cp4d_private_registry_naming.get("PRIVATE_
 export PRIVATE_REGISTRY_PUSH_PASSWORD="{{ cp4d_private_registry_naming.get("PRIVATE_REGISTRY_PUSH_PASSWORD") }}"
 export PRIVATE_REGISTRY_PULL_USER="{{ cp4d_private_registry_naming.get("PRIVATE_REGISTRY_PULL_USER") }}"
 export PRIVATE_REGISTRY_PULL_PASSWORD="{{ cp4d_private_registry_naming.get("PRIVATE_REGISTRY_PULL_PASSWORD") }}"
-{% endif %}
+{% endif -%}
+
 # ------------------------------------------------------------------------------
 # Image pull configuration
 # ------------------------------------------------------------------------------
 
-export IMAGE_PULL_SECRET="{{ pull_secret_name_input.value | default('pull-secret') }}"{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" %}
+export IMAGE_PULL_SECRET="{{ pull_secret_name_input.value | default('pull-secret') }}"
+{% if image_pull_creds_select.selected_key == "IBM Entitled Registry" -%}
 export IMAGE_PULL_CREDENTIALS="$(echo -n "cp:$IBM_ENTITLEMENT_KEY" | base64 -w 0)"
-export IMAGE_PULL_PREFIX="icr.io"{% else %}
+export IMAGE_PULL_PREFIX="icr.io"
+{% else -%}
 export IMAGE_PULL_CREDENTIALS="$(echo -n "$PRIVATE_REGISTRY_PULL_USER:$PRIVATE_REGISTRY_PULL_PASSWORD" | base64 -w 0)"
 export IMAGE_PUSH_CREDENTIALS="$(echo -n "$PRIVATE_REGISTRY_PUSH_USER:$PRIVATE_REGISTRY_PUSH_PASSWORD" | base64 -w 0)"
 export IMAGE_PULL_PREFIX="${PRIVATE_REGISTRY_LOCATION}"
-export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"{% endif %}
+export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"
+{% endif -%}
 
 # ------------------------------------------------------------------------------
 # IBM Software Hub version
@@ -92,13 +102,17 @@ export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 # Components
 # ------------------------------------------------------------------------------
 
-export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform"
+export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform,ccs,zen"
 export CPD_COMPONENTS="{{ components_to_install_str.split(',') | reject('equalto', 'ibm_wxd_opensearch') | join(',') }}"
-export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"{% if optional_images_str %}
-export IMAGE_GROUPS="{{ optional_images_str }}"{% endif %}
+export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"
+{% if optional_images_str -%}
+export IMAGE_GROUPS="{{ optional_images_str }}"
+{% endif -%}
 export UPDATE="{{ updating_components_checkbox.value | lower }}"
-export INSTALL_OPTIONS="{{ install_options_addon.value | lower }}"{% if install_options_addon.value == true %}
-export INSTALL_OPTIONS_FILE="{{ inst_options_filename }}"{% endif %}
+export INSTALL_OPTIONS="{{ install_options_addon.value | lower }}"
+{% if install_options_addon.value == true -%}
+export INSTALL_OPTIONS_FILE="{{ inst_options_filename }}"
+{% endif -%}
 
 # ------------------------------------------------------------------------------
 # License Entitlements
@@ -111,11 +125,27 @@ export LICENSE_ENTITLEMENTS="{{ entitlements_to_apply_str }}"
 # Product Specific SCC requirements
 # ------------------------------------------------------------------------------
 
-{% if components_to_install_str.split(',') | select('in', ['db2oltp', 'db2wh', 'db2aaservice', 'openpages', 'watsonx_governance']) | list %}export PREP_DB2="true"{% endif %}
-{% if 'ibm_wxd_opensearch' in components_to_install_str.split(',') %}export PREP_OPENSEARCH="true"{% endif %}
-{% if 'informix' in components_to_install_str.split(',') or 'informix_cp4d' in components_to_install_str.split(',') %}export PREP_INFORMIX="true"{% endif %}
-{% if 'mongodb' in components_to_install_str.split(',') or 'mongodb_cp4d' in components_to_install_str.split(',') %}export PREP_MONGODB="true"{% endif %}
-{% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') %}export PREP_DATASTAX="true"{% endif %}
-{% if 'planning_analytics' in components_to_install_str.split(',') %}export PREP_PA="true"{% endif %}
-{% if 'cognos_analytics' in components_to_install_str.split(',') %}export PREP_CA="true"{% endif %}
-{% if 'watsonx_orchestrate' in components_to_install_str.split(',') %}export PREP_WXO="true"{% endif %}
+{% if components_to_install_str.split(',') | select('in', ['db2oltp', 'db2wh', 'db2aaservice', 'openpages', 'watsonx_governance']) | list -%}
+export PREP_DB2="true"
+{% endif -%}
+{% if 'ibm_wxd_opensearch' in components_to_install_str.split(',') -%}
+export PREP_OPENSEARCH="true"
+{% endif -%}
+{% if 'informix' in components_to_install_str.split(',') or 'informix_cp4d' in components_to_install_str.split(',') -%}
+export PREP_INFORMIX="true"
+{% endif -%}
+{% if 'mongodb' in components_to_install_str.split(',') or 'mongodb_cp4d' in components_to_install_str.split(',') -%}
+export PREP_MONGODB="true"
+{% endif -%}
+{% if 'watsonx_data_premium' in components_to_install_str.split(',') or 'datastax_mc' in components_to_install_str.split(',') -%}
+export PREP_DATASTAX="true"
+{% endif -%}
+{% if 'planning_analytics' in components_to_install_str.split(',') -%}
+export PREP_PA="true"
+{% endif -%}
+{% if 'cognos_analytics' in components_to_install_str.split(',') -%}
+export PREP_CA="true"
+{% endif -%}
+{% if 'watsonx_orchestrate' in components_to_install_str.split(',') -%}
+export PREP_WXO="true"
+{% endif -%}

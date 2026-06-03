@@ -484,7 +484,7 @@ def _(cp4d_component_id_records, widget_labels):
 @app.cell
 def _(cp4d_component_id_records):
     install_component_table_2 = mo.ui.table(
-        label="Apply the appropriate license entitlements in the next table.",
+        label="Apply the appropriate license entitlements in the license table.",
         data=cp4d_component_id_records[(len(cp4d_component_id_records) // 2) :],
         selection="multi",
         page_size=60,
@@ -509,8 +509,7 @@ def _(install_component_table_1, install_component_table_2):
 def _(install_component_table_1, install_component_table_2):
     components_to_install = [
         item["component_id"]
-        for item in install_component_table_1.value
-        + install_component_table_2.value
+        for item in install_component_table_1.value + install_component_table_2.value
     ]
     print(components_to_install)
     components_to_install_str = ",".join(components_to_install)
@@ -734,7 +733,7 @@ def _(widget_labels):
 def _(widget_labels):
     cpd_admin_username_input = mo.ui.text(
         label=widget_labels.get("cpd_admin_username"),
-        value="kubeadmin",
+        value="cpadmin",
         kind="text",
         full_width=False,
     )

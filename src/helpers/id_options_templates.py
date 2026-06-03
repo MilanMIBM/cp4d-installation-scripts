@@ -72,7 +72,7 @@ cp4d_component_id_options = [
     "ws_runtimes",
     # Auto-installed dependencies
     "canvasbase",
-    "ccs",
+    # "ccs",
     "data_governor",
     "datarefinery",
     "datastax_mc",
@@ -102,7 +102,7 @@ cp4d_component_id_options = [
     "watson_gateway",
     "watsonx_ai_ifm",
     "wxd_query_optimizer",
-    "zen",
+    # "zen",
 ]
 
 cp4d_component_id_records = [
@@ -229,17 +229,23 @@ cp4d_component_id_records = [
     {"component_name": "Watson Knowledge Catalog", "component_id": "wkc"},
     {"component_name": "Watson Machine Learning", "component_id": "wml"},
     {"component_name": "Watson Studio", "component_id": "ws"},
-    {"component_name": "Watson Studio Pipelines", "component_id": "ws_pipelines"},
+    {
+        "component_name": "Orchestration Pipelines (watsonx.ai)",
+        "component_id": "ws_pipelines",
+    },
     {"component_name": "Watson Studio Runtimes", "component_id": "ws_runtimes"},
     # Auto-installed dependencies
     {"component_name": "Canvas Base", "component_id": "canvasbase"},
-    {"component_name": "Common Core Services", "component_id": "ccs"},
+    # {"component_name": "Common Core Services", "component_id": "ccs"},
     {
         "component_name": "IBM Cloud Pak for Data Governor",
         "component_id": "data_governor",
     },
     {"component_name": "Data Refinery", "component_id": "datarefinery"},
-    {"component_name": "DataStax Mission Control", "component_id": "datastax_mc"},
+    {
+        "component_name": "DataStax Mission Control (enables wx.data DataStax deployment)",
+        "component_id": "datastax_mc",
+    },
     {"component_name": "IBM Db2u", "component_id": "db2u"},
     {"component_name": "FoundationDB Kubernetes", "component_id": "fdb_k8s"},
     {
@@ -255,7 +261,10 @@ cp4d_component_id_records = [
     {"component_name": "Neo4j", "component_id": "ibm_neo4j"},
     {"component_name": "IBM Redis CP Operator", "component_id": "ibm_redis_cp"},
     {"component_name": "IBM Usage Metering", "component_id": "ibm_usage_metering"},
-    {"component_name": "WXD OpenSearch", "component_id": "ibm_wxd_opensearch"},
+    {
+        "component_name": "watsonx.data OpenSearch (enables wx.data OpenSearch deployment)",
+        "component_id": "ibm_wxd_opensearch",
+    },
     {"component_name": "Informix Operator", "component_id": "informix"},
     {"component_name": "MongoDB Operator", "component_id": "mongodb"},
     {
@@ -289,7 +298,7 @@ cp4d_component_id_records = [
         "component_name": "IBM watsonx.data query optimizer",
         "component_id": "wxd_query_optimizer",
     },
-    {"component_name": "Zen Service", "component_id": "zen"},
+    # {"component_name": "Zen Service", "component_id": "zen"},
 ]
 
 cp4d_license_entitlement_id_options = [

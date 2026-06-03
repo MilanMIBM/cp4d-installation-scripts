@@ -29,9 +29,9 @@ SCRIPTS_ROOT="$(cd "${CURRENT_DIR}/.." && pwd)"
 # DO_INSTALL_SOFTWAREHUB="${DO_INSTALL_SOFTWAREHUB:-true}" # 3.1 install software hub
 # DO_INSTALL_CPD="${DO_INSTALL_CPD:-true}"                 # 4.0 install cpd components
 
-DO_GLOBAL_PULL_SECRET=false                # 1.0 set up global pull credential
-DO_PRELIMINARY_SETUP=false                 # 2.0 preliminary setup
-DO_PREREQUISITE_OPERATORS=false            # 2.2 install prerequisite operators
+DO_GLOBAL_PULL_SECRET=true                # 1.0 set up global pull credential
+DO_PRELIMINARY_SETUP=true                 # 2.0 preliminary setup
+DO_PREREQUISITE_OPERATORS=true            # 2.2 install prerequisite operators
 DO_INSTALL_SOFTWAREHUB=true               # 3.1 install software hub
 DO_INSTALL_CPD=true                       # 4.0 install cpd components
 
