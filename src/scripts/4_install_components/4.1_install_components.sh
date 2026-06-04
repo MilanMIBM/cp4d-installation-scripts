@@ -39,8 +39,8 @@ if [[ -n "${PATCH_ID}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
-COMPONENTS=${COMPLETE_COMPONENT_LIST}
-# COMPONENTS=${CPD_COMPONENTS}
+# COMPONENTS=${COMPLETE_COMPONENT_LIST}
+COMPONENTS=${CPD_COMPONENTS}
 
 cpd-cli manage install-components \
     --license_acceptance=true \

@@ -419,6 +419,9 @@ non_olm:
 # ............................................................................
 non_olm:
   watsonxOrchestrate:
+    # Valid size values: small, medium, large
+    # Must be set explicitly - leaving it unset makes the operator default to an unresolved 'medium' which will make the installation get stuck.
+    size: small
     installMode: "agentic"
     watsonxAI:
       watsonxaiifm: false # Use remote models, if true requires GPUs for on-prem deployment.

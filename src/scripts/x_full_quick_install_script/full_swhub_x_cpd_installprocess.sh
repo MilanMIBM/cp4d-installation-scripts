@@ -23,17 +23,19 @@ SCRIPTS_ROOT="$(cd "${CURRENT_DIR}/.." && pwd)"
 # Override any of these at runtime, e.g.:
 #   DO_GLOBAL_PULL_SECRET=false ./full_swhub_x_cpd_installprocess.sh
 # ---------------------------------------------------------------------------
-# DO_GLOBAL_PULL_SECRET="${DO_GLOBAL_PULL_SECRET:-true}"   # 1.0 set up global pull credential
-# DO_PRELIMINARY_SETUP="${DO_PRELIMINARY_SETUP:-true}"     # 2.0 preliminary setup
-# DO_PREREQUISITE_OPERATORS="${DO_PREREQUISITE_OPERATORS:-true}"  # 2.2 install prerequisite operators
-# DO_INSTALL_SOFTWAREHUB="${DO_INSTALL_SOFTWAREHUB:-true}" # 3.1 install software hub
-# DO_INSTALL_CPD="${DO_INSTALL_CPD:-true}"                 # 4.0 install cpd components
+# DO_PREP_CERT_MANAGER=${DO_PREP_CERT_MANAGER:-true}"                   # 0.0 set up openshift cert manager
+# DO_GLOBAL_PULL_SECRET="${DO_GLOBAL_PULL_SECRET:-true}"                # 1.0 set up global pull credential
+# DO_PRELIMINARY_SETUP="${DO_PRELIMINARY_SETUP:-true}"                  # 2.0 preliminary setup
+# DO_PREREQUISITE_OPERATORS="${DO_PREREQUISITE_OPERATORS:-true}"        # 2.2 install prerequisite operators
+# DO_INSTALL_SOFTWAREHUB="${DO_INSTALL_SOFTWAREHUB:-true}"              # 3.1 install software hub
+# DO_INSTALL_CPD="${DO_INSTALL_CPD:-true}"                              # 4.0 install cpd components
 
-DO_GLOBAL_PULL_SECRET=true                # 1.0 set up global pull credential
-DO_PRELIMINARY_SETUP=true                 # 2.0 preliminary setup
-DO_PREREQUISITE_OPERATORS=true            # 2.2 install prerequisite operators
-DO_INSTALL_SOFTWAREHUB=true               # 3.1 install software hub
-DO_INSTALL_CPD=true                       # 4.0 install cpd components
+DO_PREP_CERT_MANAGER=true                  # 0.0 set up openshift cert manager
+DO_GLOBAL_PULL_SECRET=true                 # 1.0 set up global pull credential
+DO_PRELIMINARY_SETUP=true                  # 2.0 preliminary setup
+DO_PREREQUISITE_OPERATORS=true             # 2.2 install prerequisite operators
+DO_INSTALL_SOFTWAREHUB=true                # 3.1 install software hub
+DO_INSTALL_CPD=true                        # 4.0 install cpd components
 
 run_step() {
     local enabled="$1"
@@ -50,6 +52,11 @@ run_step() {
     echo "==> Running:  ${label}"
     "${script}"
 }
+
+# --- Step 0.0 - Install & set up openshift cert manager -------------------------------
+run_step "${DO_PREP_CERT_MANAGER}" \
+    "0.3 set up openshift certmanager.sh" \
+    "${SCRIPTS_ROOT}/0_initial_setup/0.3_set_up_openshift_certmanager.sh"
 
 # --- Step 1.0 - Set up global pull credential -------------------------------
 run_step "${DO_GLOBAL_PULL_SECRET}" \

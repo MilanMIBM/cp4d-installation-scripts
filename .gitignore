@@ -258,3 +258,9 @@ src/scripts/x_clean_or_debug_cpd/x_fix_cpdctl_config_format.sh
 src/scripts/x_clean_or_debug_cpd/x_fix_cpdctl_config_format_to_run_cpd-cli-wxdata-cmds.sh
 example_config/cpd_vars_mx.sh
 example_config/install-options-mx.yml
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/specs/ica-openapi-spec.yaml
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/models/ica/claude-haiku-4-5.yaml
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/models/ica/claude-opus-4-8.yaml
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/models/ica/gpt-5-4.yaml
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/import_custom_wxo_model_alt_conn.sh
+src/scripts/5_component_specific_scripts/wxo_custom_model_import/import_all_custom_wxo_models.sh
