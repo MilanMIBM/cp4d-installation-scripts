@@ -24,8 +24,15 @@ done
 
 eval "${OC_LOGIN}"
 
+# When PREPARE_TLS=true, after the HCD DataAPI route is created this script also
+# exports the certificates needed to securely connect to the HCD services from
+# outside the cluster, saving them to cp4d_config/certs/<dc_name>/:
+#   - dataapi-route-ca.crt : CA that verifies the edge-terminated DataAPI HTTPS route
+#   - cql-ca.crt           : CassandraDatacenter server CA for native CQL (9042) TLS
+PREPARE_TLS="${PREPARE_TLS:-false}"
+
 #--------------------------------
-##### Datastax uses block storage
+##### Datastax HCD uses block storage
 #--------------------------------
 
 # --- prepares prepares nonroot-v2 security context to the service
@@ -138,6 +145,7 @@ oc get cassandradatacenters.cassandra.datastax.com -n "${PROJECT_CPD_INST_OPERAN
 # --- write DataStax MC credentials to cpd_instance_details.sh ---
 REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
 VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
+CERTS_ROOT="${REPO_ROOT}/cp4d_config/certs"
 
 DATASTAX_URL="https://$(oc get route datastax-mc-ui -n ${PROJECT_CPD_INST_OPERATORS} -o jsonpath='{.spec.host}')"
 
@@ -183,6 +191,60 @@ if [[ -z "${_DATAAPI_ROUTE_EXISTS}" ]]; then
 fi
 DATASTAX_HCD_URL="https://$(oc get route "${_DATAAPI_ROUTE_NAME}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.spec.host}')"
 
+# --- PREPARE_TLS: export certs for secure external connections to the HCD services ---
+DATASTAX_HCD_ROUTE_CA="" DATASTAX_HCD_CQL_CA=""
+if [[ "${PREPARE_TLS}" == "true" ]]; then
+    echo "=== PREPARE_TLS: exporting HCD certificates for ${_PRIMARY_DC} ==="
+    _CERT_DIR="${CERTS_ROOT}/${_PRIMARY_DC}"
+    mkdir -p "${_CERT_DIR}"
+
+    # 1) DataAPI route CA: the DataAPI route is edge-terminated, so it is served by
+    #    the cluster default ingress certificate. Capture the CA that verifies it.
+    _ROUTE_CA=""
+    # Prefer the cluster CA cert published into the operands namespace.
+    _ROUTE_CA="$(oc get secret ibmcloud-cluster-ca-cert -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 --decode || true)"
+    # Fall back to the ingress operator's router CA.
+    if [[ -z "${_ROUTE_CA:-}" ]]; then
+        _ROUTE_CA="$(oc get secret router-ca -n openshift-ingress-operator -o jsonpath='{.data.tls\.crt}' 2>/dev/null | base64 --decode || true)"
+    fi
+    if [[ -n "${_ROUTE_CA:-}" ]]; then
+        DATASTAX_HCD_ROUTE_CA="${_CERT_DIR}/dataapi-route-ca.crt"
+        print -r -- "${_ROUTE_CA}" > "${DATASTAX_HCD_ROUTE_CA}"
+        chmod 600 "${DATASTAX_HCD_ROUTE_CA}"
+        echo "  [OK] DataAPI route CA saved to ${DATASTAX_HCD_ROUTE_CA}"
+    else
+        echo "  [WARN] Could not retrieve a route CA certificate; the DataAPI endpoint may use a publicly-trusted cert."
+    fi
+
+    # 2) CQL server CA: cass-operator generates a per-datacenter CA used for the
+    #    native CQL (9042) endpoint. Secret/key names vary by version, so try the
+    #    known candidates in priority order.
+    _CQL_CA=""
+    for _cand in \
+        "${_PRIMARY_DC}-ca-keystore:cert" \
+        "${_PRIMARY_DC}-ca-keystore:ca.crt" \
+        "${_PRIMARY_DC}-server-ca:ca.crt" \
+        "${_PRIMARY_DC}-server-ca:tls.crt" \
+        "datastax${_PRIMARY_DC//[^0-9]/}-ca-keystore:cert" \
+        "datastax${_PRIMARY_DC//[^0-9]/}-server-ca:ca.crt"; do
+        _sec="${_cand%%:*}"; _key="${_cand##*:}"
+        oc get secret "${_sec}" -n "${PROJECT_CPD_INST_OPERANDS}" &>/dev/null || continue
+        _CQL_CA="$(oc get secret "${_sec}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath="{.data.${_key//./\\.}}" 2>/dev/null | base64 --decode || true)"
+        if [[ -n "${_CQL_CA:-}" ]]; then
+            echo "  [INFO] CQL CA sourced from secret '${_sec}' key '${_key}'."
+            break
+        fi
+    done
+    if [[ -n "${_CQL_CA:-}" ]]; then
+        DATASTAX_HCD_CQL_CA="${_CERT_DIR}/cql-ca.crt"
+        print -r -- "${_CQL_CA}" > "${DATASTAX_HCD_CQL_CA}"
+        chmod 600 "${DATASTAX_HCD_CQL_CA}"
+        echo "  [OK] CQL server CA saved to ${DATASTAX_HCD_CQL_CA}"
+    else
+        echo "  [WARN] No CassandraDatacenter CQL CA secret found for '${_PRIMARY_DC}'; skipping CQL cert export."
+    fi
+fi
+
 DATASTAX_BLOCK="
 # Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 #--- DataStax Mission Control - DataAPI
@@ -194,7 +256,9 @@ export DATASTAX_MC_PASSWORD=\"${DATASTAX_PASSWORD}\"
 export DATASTAX_HCD_ENDPOINT=\"${DATASTAX_HCD_URL}\"
 export DATASTAX_HCD_API_USER=\"${DATASTAX_HCD_API_USER}\"
 export DATASTAX_HCD_API_PASSWORD=\"${DATASTAX_HCD_API_PASSWORD}\"
-export DATASTAX_HCD_KEYSPACE=\"default_keyspace\""
+export DATASTAX_HCD_KEYSPACE=\"default_keyspace\"
+export DATASTAX_HCD_ROUTE_CA=\"${DATASTAX_HCD_ROUTE_CA}\"
+export DATASTAX_HCD_CQL_CA=\"${DATASTAX_HCD_CQL_CA}\""
 
 if [[ -f "${VARS_FILE}" ]]; then
     echo "${DATASTAX_BLOCK}" >> "${VARS_FILE}"

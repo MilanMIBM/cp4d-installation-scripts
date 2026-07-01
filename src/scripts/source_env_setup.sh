@@ -7,6 +7,8 @@ _CP4D_ENV_LOADED=1
 _ENV_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export CONFIG_DIR="${_ENV_SETUP_DIR}/../../cp4d_config"
 export SERVICE_INSTANCE_FILE_DIR="${_ENV_SETUP_DIR}/../../service_instances"
+# Ensure payload output dir exists so provisioning scripts can write into it
+mkdir -p "${SERVICE_INSTANCE_FILE_DIR}"
 unset _ENV_SETUP_DIR
 
 _sourced=()

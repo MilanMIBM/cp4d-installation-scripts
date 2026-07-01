@@ -630,7 +630,7 @@ def _(widget_labels):
     )
 
     # licenses_are_prod_checkbox
-    return
+    return licenses_are_prod_checkbox
 
 
 @app.cell
@@ -640,19 +640,19 @@ def _(widget_labels):
     )
 
     # updating_components_checkbox
-    return
+    return updating_components_checkbox
 
 
 @app.cell
 def _(widget_labels):
     cp4d_version_input = mo.ui.text(
         label=widget_labels.get("cp4d_version"),
-        value="5.3.1",
+        value="5.4.0",
         full_width=False,
     )
 
     # cp4d_version_input
-    return
+    return cp4d_version_input
 
 
 @app.cell

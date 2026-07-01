@@ -821,7 +821,7 @@ parse_arguments() {
     }
     
     # Check if version is less than 5.3.0 (must be after version_compare function definition)
-    if ! version_compare "$VERSION" "5.3.0"; then
+    if ! version_compare "$VERSION" "5.4.0"; then
         log_error "Unsupported version: $VERSION"
         log_error "Watson Orchestrate version must be 5.3.0 or higher"
         log_error "This script supports versions 5.3.0 and above"

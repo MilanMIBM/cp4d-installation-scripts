@@ -18,7 +18,7 @@ OpenRouter openrouter
 x.ai x-ai
 Ollama ollama
 Note:
-When importing a model from OpenRouter, always set the max_token parameter explicitly. If you skip this step, the system defaults to 65536 tokens. This high token count can cause the request to fail if you don’t have enough credits.
+When importing a model from OpenRouter, always set the max_token parameter explicitly. If you skip this step, the system defaults to 65536 tokens. This high token count can cause the request to fail if you don't have enough credits.
 GPT-OSS-120b is a non-IBM product governed by a third-party license that may impose use restrictions and other obligations. By using this model you agree to the terms. Read the terms.
 ​
 Understanding Virtual Models
@@ -265,7 +265,7 @@ orchestrate connections add -a watsonx_credentials
 orchestrate connections configure -a watsonx_credentials --env draft -k key_value -t team
 orchestrate connections set-credentials -a watsonx_credentials --env draft -e "api_key=my_watsonx_api_key"
 Note:
-When you add a watsonx.ai virtual model, include the provider-config details. Without them, chat access to the model may fail. Provide custom host details using the —provider-config flag in the orchestrate models add command. For more information, see Using the CLI only.
+When you add a watsonx.ai virtual model, include the provider-config details. Without them, chat access to the model may fail. Provide custom host details using the -provider-config flag in the orchestrate models add command. For more information, see Using the CLI only.
 3
 Add the model
 
@@ -274,7 +274,7 @@ orchestrate models import --file watsonx-model.yaml --app-id watsonx_credentials
 Notes:
 Provide one of: watsonx_space_id, watsonx_project_id, or watsonx_deployment_id.
 Include watsonx_cpd_url, watsonx_cpd_username, watsonx_cpd_password only for on-prem (CPD) setups.
-When deploying Deploy on Demand (DoD) models, you need to explicitly provide the model configuration during registration. Set these configuration values according to the model’s requirements, since they don’t automatically transfer during inference from the watsonx Orchestrate side.
+When deploying Deploy on Demand (DoD) models, you need to explicitly provide the model configuration during registration. Set these configuration values according to the model's requirements, since they don't automatically transfer during inference from the watsonx Orchestrate side.
 Show example
 
 Groq
@@ -747,7 +747,7 @@ orchestrate models import --file aws-bedrock-model.yaml --app-id aws_bedrock_cre
 Note:
 You must provide either the api_key, aws_secret_access_key, or aws_access_key_id.
 You must provide the model name in the name field.
-When deploying Deploy on Demand (DoD) models, you need to explicitly provide the model configuration during registration. Set these configuration values according to the model’s requirements, since they don’t automatically transfer during inference from the watsonx Orchestrate side.
+When deploying Deploy on Demand (DoD) models, you need to explicitly provide the model configuration during registration. Set these configuration values according to the model's requirements, since they don't automatically transfer during inference from the watsonx Orchestrate side.
 Show example
 
 Mistral
@@ -984,7 +984,7 @@ orchestrate server reset
 4
 Define the model specification file
 
-For Ollama, you don’t need to create a connection or use an actual API key. You can use a string such as ollama as an API key.
+For Ollama, you don't need to create a connection or use an actual API key. You can use a string such as ollama as an API key.
 You must use your current local network IP address as your URL. Ollama will not work if you use localhost or 0.0.0.0 in the model specification file.
 ollama-llama2.yaml
 spec_version: v1

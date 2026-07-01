@@ -3,6 +3,7 @@ ruff
 requests
 marimo[mcp]
 ibm-watsonx-ai
+ibm-code-engine-sdk
 wigglystuff
 jsonpath-python
 cloud-pak-operations-cli

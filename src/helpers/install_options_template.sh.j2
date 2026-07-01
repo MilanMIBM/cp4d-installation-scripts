@@ -360,8 +360,8 @@ non_olm:
 # ............................................................................
 # watsonx.data integration parameters
 # ............................................................................
-# It can't use 'non_olm:'
-custom_spec:
+# It can't use 'non_olm:' for 5.3.1 and previous, there you have to use "custom_spec:"
+non_olm: # for 5.4.0+ versions
   watsonx_dataintegration:
     enableBatchBulkETL: true # datastage
     enableRealtimeStreaming: true # streamsets
@@ -436,6 +436,6 @@ non_olm:
 # ............................................................................
 non_olm:
   Dmcaddon:
-    version: 5.3.1
+    version: 5.4.0
     storageSize: 20Gi
 {% endif %}

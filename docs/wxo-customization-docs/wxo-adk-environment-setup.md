@@ -43,7 +43,7 @@ cpd: For on-premises environments.
 ​
 --activate / -a
 string
-Optional, allows you to activate the environment as soon as it’s added.
+Optional, allows you to activate the environment as soon as it's added.
 ​
 --insecure
 boolean
@@ -82,7 +82,7 @@ Username of the user in the environment. It is only valid for on-premises enviro
 ​
 --password
 string
-Password of the user in the on-premises environment. Can’t be used if you provide an --api-key.
+Password of the user in the on-premises environment. Can't be used if you provide an --api-key.
 ​
 Listing all environments
 Use the orchestrate env list command to list all environments currently available to your CLI.

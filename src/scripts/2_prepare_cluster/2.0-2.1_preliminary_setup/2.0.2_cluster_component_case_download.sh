@@ -14,10 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 
-export CP_OPEN_DOWNLOAD=true # downloads the cases and images from cp.icr.io/cpopen rather than ibm's github.
+export CP_OPEN_DOWNLOAD=false # downloads the cases and images from cp.icr.io/cpopen rather than ibm's github.
 
 PATCH_FLAG=()
-if [[ -n "${PATCH_ID}" ]]; then
+if [[ -n "${PATCH_ID:-}" ]]; then
     PATCH_FLAG=(--patch_id=${PATCH_ID})
 fi
 
@@ -34,7 +34,7 @@ cpd-cli manage case-download \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --cluster_resources=true \
-    "${PATCH_FLAG[@]}" \
+    ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"} \
     --from_oci=${CP_OPEN_DOWNLOAD}
 
     

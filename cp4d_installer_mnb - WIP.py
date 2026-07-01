@@ -36,7 +36,7 @@ def _(os):
         "PROJECT_CPD_INST_SCHEDULER", "ibm-scheduler"
     )
     PROJECT_CPD_INST_OPERANDS = os.getenv("PROJECT_CPD_INST_OPERANDS", "cpd-operands")
-    CPD_VERSION = os.getenv("CPD_VERSION", "5.3.1")
+    CPD_VERSION = os.getenv("CPD_VERSION", "5.4.0")
     return
 
 

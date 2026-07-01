@@ -18,6 +18,13 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 eval "${OC_LOGIN}"
 
 # ---
+# When PREPARE_TLS=true, this script also creates the passthrough route (if not
+# already requested elsewhere), extracts the instance server CA certificate, and
+# saves it to cp4d_config/certs/<edb_instance_name>/ so the database can be
+# reached securely from outside the cluster.
+PREPARE_TLS="${PREPARE_TLS:-false}"
+
+# ---
 
 echo ""
 echo "=== Listing CPDEdbInstances in namespace: ${PROJECT_CPD_INST_OPERANDS} ==="
@@ -33,7 +40,10 @@ fi
 
 # ---
 # Create passthrough routes for each instance's <name>-rw service
+# (only when PREPARE_TLS=true, since external secure access needs both the
+#  route and the exported CA certificate)
 
+if [[ "${PREPARE_TLS}" == "true" ]]; then
 echo "=== Creating passthrough routes ==="
 echo ""
 
@@ -68,12 +78,17 @@ done
 echo "=== Routes in ${PROJECT_CPD_INST_OPERANDS} ==="
 oc get routes -n "${PROJECT_CPD_INST_OPERANDS}"
 echo ""
+else
+    echo "=== PREPARE_TLS=false: skipping route creation and cert export ==="
+    echo ""
+fi
 
 # ---
 # Extract credentials from each instance's -app secret and write to cpd_instance_details.sh
 
 REPO_ROOT="$(cd "${SCRIPT_DIR}" && while [[ ! -f pyproject.toml ]]; do cd ..; done && pwd)"
 VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_instance_details.sh"
+CERTS_ROOT="${REPO_ROOT}/cp4d_config/certs"
 
 echo "=== Extracting EDB Postgres credentials ==="
 echo ""
@@ -121,6 +136,44 @@ for INSTANCE in "${EDB_INSTANCES[@]}"; do
     VAR_PREFIX="EDB_POSTGRES_${INSTANCE:u}"
     VAR_PREFIX="${VAR_PREFIX//-/_}"
 
+    # When TLS prep is requested, extract the instance server CA certificate and
+    # save it to cp4d_config/certs/<instance>/ for secure external connections.
+    EDB_CERT_PATH=""
+    if [[ "${PREPARE_TLS}" == "true" ]]; then
+        CERT_DIR="${CERTS_ROOT}/${INSTANCE}"
+
+        # The CA cert lives in the dedicated <instance>-edb-db-ca secret (key ca.crt).
+        EDB_CA_CRT=""
+        CA_SECRET="${INSTANCE}-edb-db-ca"
+        if oc get secret "${CA_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" &>/dev/null; then
+            EDB_CA_CRT=$(oc get secret "${CA_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+                -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 -d || true)
+        fi
+
+        # Fall back to the -app secret in case a build publishes ca.crt there.
+        if [[ -z "${EDB_CA_CRT:-}" ]]; then
+            EDB_CA_CRT=$(oc get secret "${APP_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+                -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 -d || true)
+        fi
+
+        if [[ -n "${EDB_CA_CRT:-}" ]]; then
+            mkdir -p "${CERT_DIR}"
+            EDB_CERT_PATH="${CERT_DIR}/ca.crt"
+            print -r -- "${EDB_CA_CRT}" > "${EDB_CERT_PATH}"
+            chmod 600 "${EDB_CERT_PATH}"
+            echo "  [OK] CA certificate saved to ${EDB_CERT_PATH}"
+        else
+            echo "  [WARN] No CA certificate found for '${INSTANCE}'. Skipping cert export."
+        fi
+    fi
+
+    # Build an sslmode=verify-full external URI when both the route and cert exist.
+    if [[ -n "${EDB_ROUTE_URI:-}" && -n "${EDB_CERT_PATH:-}" ]]; then
+        EDB_ROUTE_URI_TLS="${EDB_ROUTE_URI}?sslmode=verify-full&sslrootcert=${EDB_CERT_PATH}"
+    else
+        EDB_ROUTE_URI_TLS=""
+    fi
+
     echo "  Username : ${EDB_USERNAME}"
     echo "  DB Name  : ${EDB_DBNAME}"
     echo "  Local Port: ${EDB_LOCAL_PORT}"
@@ -135,7 +188,9 @@ export ${VAR_PREFIX}_DBNAME=\"${EDB_DBNAME}\"
 export ${VAR_PREFIX}_LOCAL_PORT=\"${EDB_LOCAL_PORT}\"
 export ${VAR_PREFIX}_LOCAL_URI=\"${EDB_LOCAL_URI}\"
 export ${VAR_PREFIX}_ROUTE_PORT=\"443\"
-export ${VAR_PREFIX}_ROUTE_URI=\"${EDB_ROUTE_URI}\""
+export ${VAR_PREFIX}_ROUTE_URI=\"${EDB_ROUTE_URI}\"
+export ${VAR_PREFIX}_SSLROOTCERT=\"${EDB_CERT_PATH}\"
+export ${VAR_PREFIX}_ROUTE_URI_TLS=\"${EDB_ROUTE_URI_TLS}\""
 done
 
 if [[ -f "${VARS_FILE}" ]]; then

@@ -32,7 +32,7 @@ if [[ -n "${INSTALL_OPTIONS}" ]]; then
 fi
 
 PATCH_FLAG=()
-if [[ -n "${PATCH_ID}" ]]; then
+if [[ -n "${PATCH_ID:-}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
@@ -54,7 +54,7 @@ echo "[INFO] Deleting ${COMPONENTS_TO_REINSTALL}  CR's in ${PROJECT_CPD_INST_OPE
 cpd-cli manage delete-cr \
     --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --components=${COMPONENTS_TO_REINSTALL_STRING} \
-    "${PATCH_FLAG[@]}" \
+    ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"} \
     --include_dependency=${DELETE_DEPENDENCIES} || echo "[WARN] delete-cr failed (possibly no permissions or CRs already absent), continuing..."
 
 echo "[INFO] Uninstalling components ${COMPONENTS_TO_REINSTALL} in ${PROJECT_CPD_INST_OPERANDS}"
@@ -102,4 +102,4 @@ cpd-cli manage install-components \
     "${PARAM_FILE_FLAG[@]}" \
     "${SKIP_COMPONENTS_FLAG[@]}" \
     --upgrade=${UPDATE} \
-    "${PATCH_FLAG[@]}"
+    ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"} 

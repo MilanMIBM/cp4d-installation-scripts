@@ -22,10 +22,7 @@ DELETE_DEPENDENCIES=true
 #---
 
 COMPONENTS_TO_DELETE=(
-    "cognos_analytics"
-    "dmc"
-    "dv"
-    "db2oltp"
+    "ibm_databand"
 )
 
 COMPONENTS_TO_DELETE_STRING=$(IFS=,; echo "${COMPONENTS_TO_DELETE[*]}")
@@ -49,5 +46,5 @@ cpd-cli manage delete-cluster-scoped-resources \
     --include_dependency=${DELETE_DEPENDENCIES} \
     --components=${COMPONENTS_TO_DELETE_STRING}
 
-echo "[INFO] Deleting all Cluster Scoped Resources in ${PROJECT_CPD_INST_OPERATORS}"
+echo "[INFO] Deleting all Specified Cluster Scoped Resources in ${PROJECT_CPD_INST_OPERATORS}"
 oc delete -f ${CPD_CLI_WORK_PATH}/cluster_scoped_resources_uninstall_list.yaml

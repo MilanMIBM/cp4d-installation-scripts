@@ -30,7 +30,7 @@ if [[ -n "${INSTALL_OPTIONS}" ]]; then
 fi
 
 PATCH_FLAG=()
-if [[ -n "${PATCH_ID}" ]]; then
+if [[ -n "${PATCH_ID:-}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
@@ -63,7 +63,7 @@ cpd-cli manage install-components \
     "${PARAM_FILE_FLAG[@]}" \
     "${SKIP_COMPONENTS_FLAG[@]}" \
     --upgrade=${UPDATE} \
-    "${PATCH_FLAG[@]}"
+    ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"}
 
 # --- apply the necessary security context level
 oc adm policy add-scc-to-user privileged -z wxd-opensearch-sa -n ${PROJECT_CPD_INST_OPERANDS}

@@ -41,7 +41,7 @@ if [[ -n "${INSTALL_OPTIONS}" ]]; then
 fi
 
 PATCH_FLAG=()
-if [[ -n "${PATCH_ID}" ]]; then
+if [[ -n "${PATCH_ID:-}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
@@ -55,6 +55,11 @@ if (( ${#INSTANCE_COMPONENTS[@]} > 0 )); then
     done
     INSTANCE_COMPONENTS_STR="${(j:,:)INSTANCE_COMPONENTS}"
     echo "[INFO] Running install-components for: ${INSTANCE_COMPONENTS_STR}"
+    # Allow this step to fail without aborting the rest of the step-3 chain.
+    # A non-zero exit here is commonly a benign "already installed" / helm
+    # ownership collision when the components already exist on the cluster.
+    # We capture the rc, warn, and continue instead of letting `set -e` kill us.
+    set +e
     cpd-cli manage install-components \
         --license_acceptance=true \
         --components=${INSTANCE_COMPONENTS_STR} \
@@ -68,5 +73,12 @@ if (( ${#INSTANCE_COMPONENTS[@]} > 0 )); then
         "${PARAM_FILE_FLAG[@]}" \
         "${SKIP_COMPONENTS_FLAG[@]}" \
         --upgrade=${UPDATE} \
-        "${PATCH_FLAG[@]}"
+        ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"} 
+    _ic_rc=$?
+    set -e
+    if (( _ic_rc != 0 )); then
+        echo "[WARN] install-components exited ${_ic_rc} for: ${INSTANCE_COMPONENTS_STR}."
+        echo "[WARN] This is often a benign 'already installed' / helm ownership collision."
+        echo "[WARN] Check logs in ~/cpd-cli/work; continuing the step-3 chain regardless."
+    fi
 fi

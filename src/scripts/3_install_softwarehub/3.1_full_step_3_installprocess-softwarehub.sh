@@ -14,8 +14,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
 CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-"${CURRENT_DIR}/3.2_set_up_cpd_admin.sh"
-"${CURRENT_DIR}/3.3_install_ibm_softwarehub.sh"
-"${CURRENT_DIR}/3.3.1_get_instance_creds.sh"
-"${CURRENT_DIR}/3.3.2_softwarehub_admission_controller.sh"
-"${CURRENT_DIR}/3.4_apply_entitlements.sh"
+# Run each step; a non-zero exit warns but does not abort the chain, so a
+# benign "already installed" failure in one step still lets the rest proceed.
+run_step() {
+    local rc=0
+    "$@" || rc=$?
+    (( rc != 0 )) && echo "[WARN] $(basename "$1") exited ${rc}; continuing chain."
+    return 0
+}
+
+run_step "${CURRENT_DIR}/3.2_set_up_cpd_admin.sh"
+run_step "${CURRENT_DIR}/3.3_install_ibm_softwarehub.sh"
+run_step "${CURRENT_DIR}/3.3.1_get_instance_creds.sh"
+run_step "${CURRENT_DIR}/3.3.2_softwarehub_admission_controller.sh"
+run_step "${CURRENT_DIR}/3.4_apply_entitlements.sh"

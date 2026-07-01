@@ -18,8 +18,8 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 EDB_ID=$((RANDOM % 90000 + 10000)) # Random 5 digit id suffix
 INSTANCE_NAME="edb-postgres-${EDB_ID}"
 INSTANCE_DESCRIPTION="EDB Postgres DB"
-ADDON_VERSION="5.3.1"
-INSTANCE_VERSION=18.1   # Pick one: 13.23, 14.20, 15.15, 16.11, 17.7, 18.1 (based on SWHub version; 18.1 for 5.3.1)
+ADDON_VERSION="5.4.0"
+INSTANCE_VERSION=18.3   # Pick one: 13.23, 14.20, 15.15, 16.11, 17.7, 18.1 (based on SWHub version; 18.3 for 5.4.0)
 EDB_TYPE="enterprise"   # "standard" or "enterprise"
 INSTANCE_STORAGE=20
 INSTANCE_STORAGE_UNIT="Gi"   # Gi, Ti, or Pi

@@ -15,7 +15,7 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 
 eval "${CPDM_OC_LOGIN}"
 
-#--- Set to false if it's a Helm managed cp4d instance (default after v5.3.1)
+#--- Set to false if it's a Helm managed cp4d instance (default after v5.4.0)
 OLM_INSTALL=false
 #---
 

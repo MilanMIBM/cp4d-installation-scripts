@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.3.3",
     "cloud-pak-operations-cli>=0.13.0",
+    "ibm-code-engine-sdk>=6.0.2",
     "ibm-watsonx-ai>=1.5.10",
     "jinja2>=3.1.6",
     "jsonpath-python>=1.1.5",

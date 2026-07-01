@@ -35,12 +35,12 @@ if [[ -n "${INSTALL_OPTIONS}" ]]; then
 fi
 
 PATCH_FLAG=()
-if [[ -n "${PATCH_ID}" ]]; then
+if [[ -n "${PATCH_ID:-}" ]]; then
     PATCH_FLAG=(--patch_id="${PATCH_ID}")
 fi
 
-# COMPONENTS=${COMPLETE_COMPONENT_LIST}
-COMPONENTS=${CPD_COMPONENTS}
+COMPONENTS=${COMPLETE_COMPONENT_LIST}
+# COMPONENTS=${CPD_COMPONENTS}
 
 cpd-cli manage install-components \
     --license_acceptance=true \
@@ -55,5 +55,5 @@ cpd-cli manage install-components \
     "${PARAM_FILE_FLAG[@]}" \
     "${SKIP_COMPONENTS_FLAG[@]}" \
     --upgrade=${UPDATE} \
-    "${PATCH_FLAG[@]}"
+    ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"} 
     
