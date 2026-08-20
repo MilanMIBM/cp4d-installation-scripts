@@ -37,6 +37,20 @@ DO_PREREQUISITE_OPERATORS=true             # 2.2 install prerequisite operators
 DO_INSTALL_SOFTWAREHUB=true                # 3.1 install software hub
 DO_INSTALL_CPD=true                        # 4.0 install cpd components
 
+# Steps listed here are treated as non-fatal: if they fail, the chain logs a
+# warning and carries on instead of aborting the whole install.
+NON_FATAL_STEPS=("0.3 set up openshift certmanager.sh")
+
+FAILED_STEPS=()
+
+is_non_fatal() {
+    local label="$1" candidate
+    for candidate in "${NON_FATAL_STEPS[@]}"; do
+        [[ "${candidate}" == "${label}" ]] && return 0
+    done
+    return 1
+}
+
 run_step() {
     local enabled="$1"
     local label="$2"
@@ -50,7 +64,19 @@ run_step() {
 
     echo ""
     echo "==> Running:  ${label}"
-    "${script}"
+
+    local rc=0
+    "${script}" || rc=$?
+
+    if (( rc != 0 )); then
+        FAILED_STEPS+=("${label} (exit ${rc})")
+        if is_non_fatal "${label}"; then
+            echo "==> WARNING: ${label} failed with exit ${rc} - continuing (non-fatal step)." >&2
+            return 0
+        fi
+        echo "==> ERROR: ${label} failed with exit ${rc} - aborting install." >&2
+        exit "${rc}"
+    fi
 }
 
 # --- Step 0.0 - Install & set up openshift cert manager -------------------------------
@@ -82,3 +108,14 @@ run_step "${DO_INSTALL_SOFTWAREHUB}" \
 run_step "${DO_INSTALL_CPD}" \
     "4.0 install cpd components" \
     "${SCRIPTS_ROOT}/4_install_components/4.0_full_step_4_installprocess-cpd.sh"
+
+# --- Summary -----------------------------------------------------------------
+echo ""
+if (( ${#FAILED_STEPS[@]} > 0 )); then
+    echo "==> Install chain finished, but these steps reported failures:"
+    for step in "${FAILED_STEPS[@]}"; do
+        echo "      - ${step}"
+    done
+else
+    echo "==> Install chain finished - all enabled steps completed successfully."
+fi

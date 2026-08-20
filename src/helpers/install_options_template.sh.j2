@@ -391,7 +391,7 @@ non_olm:
 {% endif %}{% if "watsonx_governance" in components_to_install %}
 ---
 # ............................................................................
-# watsonx.governance parameters 
+# watsonx.governance parameters
 # installType Valid values:
 #   all - Specify this option if you purchased both Model Management and Risk and Compliance Foundation entitlement.
 #   mm - Specify this option if you purchased Model Management entitlement.
@@ -399,11 +399,19 @@ non_olm:
 # ............................................................................
 non_olm:
   watsonxGovernance:
-    installType: all
+{% if "watsonx-gov-rc" in entitlements_to_apply|default([]) %}    installType: rcf
+    enableFactsheet: false
+    enableOpenscale: false
+    enableOpenpages: true
+{% elif "watsonx-gov-mm" in entitlements_to_apply|default([]) %}    installType: mm
+    enableFactsheet: true
+    enableOpenscale: true
+    enableOpenpages: false
+{% else %}    installType: all
     enableFactsheet: true
     enableOpenscale: true
     enableOpenpages: true
-#   openpagesInstanceCR: "op-wxgov-instance"
+{% endif %}#   openpagesInstanceCR: "op-wxgov-instance"
 #   openPages:
 #     databaseType: internal
 #     database: Db2

@@ -42,10 +42,44 @@ spec:
   sourceNamespace: openshift-marketplace
 EOF
 
-echo "[INFO] Waiting for cert-manager-operator CSV to succeed..."
-oc wait --for=jsonpath='{.status.phase}'=Succeeded csv \
-    -l operators.coreos.com/openshift-cert-manager-operator.openshift-cert-manager-operator \
-    -n openshift-cert-manager-operator \
-    --timeout=300s
+CERT_MANAGER_NS="openshift-cert-manager-operator"
+CERT_MANAGER_LABEL="operators.coreos.com/openshift-cert-manager-operator.openshift-cert-manager-operator"
+CERT_MANAGER_TIMEOUT="${CERT_MANAGER_TIMEOUT:-600}"   # total seconds to wait for the CSV to reach Succeeded
 
-echo "[INFO] cert-manager Operator for Red Hat OpenShift installed successfully."
+echo "[INFO] Waiting for cert-manager-operator CSV to appear and succeed (timeout ${CERT_MANAGER_TIMEOUT}s)..."
+
+cert_manager_phase() {
+    oc get csv -n "${CERT_MANAGER_NS}" -l "${CERT_MANAGER_LABEL}" \
+        -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true
+}
+
+deadline=$((SECONDS + CERT_MANAGER_TIMEOUT))
+phase=""
+while (( SECONDS < deadline )); do
+    phase="$(cert_manager_phase)"
+    case "${phase}" in
+        Succeeded)
+            break
+            ;;
+        Failed)
+            echo "[WARN] cert-manager-operator CSV entered phase 'Failed'. Continuing anyway - verify manually with:" >&2
+            echo "       oc get csv -n ${CERT_MANAGER_NS}" >&2
+            break
+            ;;
+        "")
+            echo "[INFO] CSV not created yet by OLM, waiting..."
+            ;;
+        *)
+            echo "[INFO] CSV phase: ${phase}"
+            ;;
+    esac
+    sleep 10
+done
+
+if [[ "${phase}" == "Succeeded" ]]; then
+    echo "[INFO] cert-manager Operator for Red Hat OpenShift installed successfully."
+else
+    echo "[WARN] cert-manager-operator CSV did not reach 'Succeeded' within ${CERT_MANAGER_TIMEOUT}s (last phase: '${phase:-none}')." >&2
+    echo "[WARN] Not failing the install - check the operator status manually with:" >&2
+    echo "       oc get csv,subscription,installplan -n ${CERT_MANAGER_NS}" >&2
+fi

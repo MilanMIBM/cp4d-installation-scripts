@@ -124,10 +124,15 @@ print(json.dumps({'data': {'.dockerconfigjson': base64.b64encode(data.encode()).
 
     # --------------------------------------------------------------------------
     # Distribute the global pull secret to every PROJECT_* namespace as a
-    # dockerconfigjson secret named ${IMAGE_PULL_SECRET}.
+    # dockerconfigjson secret named ${IMAGE_PULL_SECRET}, plus a companion
+    # 'ibm-entitlement-key' secret holding the identical dockerconfigjson (some
+    # operators/services look the credential up under that fixed name).
     # --------------------------------------------------------------------------
     _secret_name="${IMAGE_PULL_SECRET:-pull-secret}"
     _dockercfg_b64="$(printf '%s' "${_patched}" | base64 | tr -d '\n')"
+
+    _target_secrets=("${_secret_name}")
+    [[ "${_secret_name}" != "ibm-entitlement-key" ]] && _target_secrets+=("ibm-entitlement-key")
 
     # Collect all PROJECT_* variable values (zsh: ${(k)parameters} lists names).
     _project_ns=()
@@ -145,19 +150,23 @@ print(json.dumps({'data': {'.dockerconfigjson': base64.b64encode(data.encode()).
                 echo "[INFO] Namespace ${_ns} does not exist yet - skipping pull-secret copy."
                 continue
             fi
-            _ns_patch_file="$(mktemp)"
-            cat > "${_ns_patch_file}" <<EOF
+            # Apply under the configured name and under the fixed
+            # 'ibm-entitlement-key' name, both carrying the same auth payload.
+            for _target_secret in "${_target_secrets[@]}"; do
+                _ns_patch_file="$(mktemp)"
+                cat > "${_ns_patch_file}" <<EOF
 {
   "apiVersion": "v1",
   "kind": "Secret",
-  "metadata": { "name": "${_secret_name}", "namespace": "${_ns}" },
+  "metadata": { "name": "${_target_secret}", "namespace": "${_ns}" },
   "type": "kubernetes.io/dockerconfigjson",
   "data": { ".dockerconfigjson": "${_dockercfg_b64}" }
 }
 EOF
-            oc apply -f "${_ns_patch_file}"
-            rm -f "${_ns_patch_file}"
-            echo "[INFO] Applied pull-secret '${_secret_name}' to namespace ${_ns}."
+                oc apply -f "${_ns_patch_file}"
+                rm -f "${_ns_patch_file}"
+                echo "[INFO] Applied pull-secret '${_target_secret}' to namespace ${_ns}."
+            done
         done
     fi
 fi

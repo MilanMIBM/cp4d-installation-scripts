@@ -139,6 +139,7 @@ until oc get pod -n "${NAMESPACE}" -l name=rhods-operator --no-headers 2>/dev/nu
   fi
 done
 REMAINING=$(( TIMEOUT - ELAPSED ))
+(( REMAINING < 10 )) && REMAINING=10
 echo "  Pod found after ${ELAPSED}s, waiting for Ready (up to ${REMAINING}s remaining)..."
 oc wait pod \
   --namespace "${NAMESPACE}" \
@@ -240,7 +241,9 @@ echo "Verifying pods in redhat-ods-applications..."
 KSERVE_STATE=$(oc get datasciencecluster default-dsc \
   -o jsonpath='{.spec.components.kserve.managementState}' 2>/dev/null || true)
 
-SELECTORS=("app=kubeflow-training-operator" "app=odh-model-controller")
+# RHOAI 2.25+ dropped the legacy "app=" label on the training operator; "control-plane="
+# is the one label carried by all of these controller pods across versions.
+SELECTORS=("control-plane=kubeflow-training-operator" "control-plane=odh-model-controller")
 [[ "${KSERVE_STATE}" != "Removed" ]] && SELECTORS+=("control-plane=kserve-controller-manager")
 
 for selector in "${SELECTORS[@]}"; do
@@ -254,7 +257,9 @@ for selector in "${SELECTORS[@]}"; do
       exit 1
     fi
   done
+  # Guard against a 0s timeout, which oc wait treats as "wait forever".
   REMAINING=$(( TIMEOUT - ELAPSED ))
+  (( REMAINING < 10 )) && REMAINING=10
   oc wait pod \
     --namespace redhat-ods-applications \
     --for=condition=Ready \

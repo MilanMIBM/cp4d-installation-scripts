@@ -94,7 +94,7 @@ export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"
 # ------------------------------------------------------------------------------
 
 export VERSION="{{ cp4d_version_input.value }}"
-export PATCH_ID="" # "5" - Current patch as of 21.05.2026
+export PATCH_ID="{{ cp4d_patch_input.value }}" # Number like 1, 2, 3 which corresponds to the patch to install.
 export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}${PATCH_ID:+.${PATCH_ID}}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
@@ -118,7 +118,7 @@ export INSTALL_OPTIONS_FILE="{{ inst_options_filename }}"
 # License Entitlements
 # ------------------------------------------------------------------------------
 
-export PROD_LICENSE="{{ licenses_are_prod_checkbox.value | lower }}"
+export PROD_LICENSE="{{ licenses_are_prod_checkbox.value | lower }}" # Adjust 
 export LICENSE_ENTITLEMENTS="{{ entitlements_to_apply_str }}"
 
 # ------------------------------------------------------------------------------
