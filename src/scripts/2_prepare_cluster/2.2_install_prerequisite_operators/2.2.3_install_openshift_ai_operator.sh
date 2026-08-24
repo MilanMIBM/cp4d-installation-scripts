@@ -18,7 +18,9 @@ eval "${OC_LOGIN}"
 NAMESPACE="redhat-ods-operator"
 # Service Mesh version to install: 2 or 3
 SERVICE_MESH_VERSION="${SERVICE_MESH_VERSION:-3}"
-TIMEOUT=60
+# Waiting on OLM to resolve, download and install an operator regularly exceeds a
+# minute on a cold catalog, so give the CSV/pod waits real headroom.
+TIMEOUT="${TIMEOUT:-600}"
 
 # Skip if RHOAI operator is already installed and both DSCInitialization and DataScienceCluster are Ready
 if oc get csv -n "${NAMESPACE}" --no-headers 2>/dev/null | grep -q "Succeeded"; then
@@ -109,16 +111,19 @@ EOF
 
   echo "Waiting for Service Mesh ${SERVICE_MESH_VERSION} CSV to reach Succeeded (timeout: ${TIMEOUT}s)..."
   ELAPSED=0
-  until oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; do
-    sleep 10
-    ELAPSED=$(( ELAPSED + 10 ))
-    CSV_STATE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null | grep "${SM_OPERATOR}" | awk '{print $1, $NF}' || true)
-    echo "  [${ELAPSED}s] CSV: ${CSV_STATE:-pending}"
+  # The timeout is checked before sleeping again, never between the last sleep and
+  # the next condition test - otherwise a CSV that succeeds exactly on the final
+  # tick is reported as a failure.
+  while ! oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; do
     if (( ELAPSED >= TIMEOUT )); then
       echo "[ERROR] Service Mesh ${SERVICE_MESH_VERSION} CSV did not reach Succeeded after ${TIMEOUT}s." >&2
       oc get csv -n openshift-operators | grep "${SM_OPERATOR}" || true
       exit 1
     fi
+    sleep 10
+    ELAPSED=$(( ELAPSED + 10 ))
+    CSV_STATE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null | grep "${SM_OPERATOR}" | awk '{print $1, $NF}' || true)
+    echo "  [${ELAPSED}s] CSV: ${CSV_STATE:-pending}"
   done
   echo "[INFO] Service Mesh ${SERVICE_MESH_VERSION} operator installed successfully."
 fi
@@ -128,15 +133,15 @@ fi
 # Wait for the operator pod to be running
 echo "Waiting for rhods-operator pod to become ready (timeout: ${TIMEOUT}s)..."
 ELAPSED=0
-until oc get pod -n "${NAMESPACE}" -l name=rhods-operator --no-headers 2>/dev/null | grep -q .; do
-  sleep 10
-  ELAPSED=$(( ELAPSED + 10 ))
-  CSV_STATE=$(oc get csv -n "${NAMESPACE}" --no-headers 2>/dev/null | awk '{print $1, $NF}' | head -1)
-  echo "  [${ELAPSED}s] pod not yet created - CSV: ${CSV_STATE:-pending}"
+while ! oc get pod -n "${NAMESPACE}" -l name=rhods-operator --no-headers 2>/dev/null | grep -q .; do
   if (( ELAPSED >= TIMEOUT )); then
     echo "[ERROR] rhods-operator pod never appeared in ${NAMESPACE} after ${TIMEOUT}s." >&2
     exit 1
   fi
+  sleep 10
+  ELAPSED=$(( ELAPSED + 10 ))
+  CSV_STATE=$(oc get csv -n "${NAMESPACE}" --no-headers 2>/dev/null | awk '{print $1, $NF}' | head -1)
+  echo "  [${ELAPSED}s] pod not yet created - CSV: ${CSV_STATE:-pending}"
 done
 REMAINING=$(( TIMEOUT - ELAPSED ))
 (( REMAINING < 10 )) && REMAINING=10
@@ -248,14 +253,14 @@ SELECTORS=("control-plane=kubeflow-training-operator" "control-plane=odh-model-c
 
 for selector in "${SELECTORS[@]}"; do
   ELAPSED=0
-  until oc get pod -n redhat-ods-applications -l "${selector}" --no-headers 2>/dev/null | grep -q .; do
-    sleep 10
-    ELAPSED=$(( ELAPSED + 10 ))
-    echo "  [${ELAPSED}s] waiting for pod with selector ${selector}..."
+  while ! oc get pod -n redhat-ods-applications -l "${selector}" --no-headers 2>/dev/null | grep -q .; do
     if (( ELAPSED >= TIMEOUT )); then
       echo "[ERROR] Pod with selector ${selector} never appeared after ${TIMEOUT}s." >&2
       exit 1
     fi
+    sleep 10
+    ELAPSED=$(( ELAPSED + 10 ))
+    echo "  [${ELAPSED}s] waiting for pod with selector ${selector}..."
   done
   # Guard against a 0s timeout, which oc wait treats as "wait forever".
   REMAINING=$(( TIMEOUT - ELAPSED ))

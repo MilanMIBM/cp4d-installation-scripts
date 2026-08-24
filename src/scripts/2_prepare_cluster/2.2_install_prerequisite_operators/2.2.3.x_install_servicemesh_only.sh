@@ -17,7 +17,8 @@ eval "${OC_LOGIN}"
 
 # Service Mesh version to install: 2 or 3
 SERVICE_MESH_VERSION="${SERVICE_MESH_VERSION:-3}"
-TIMEOUT=60
+# OLM operator installs regularly exceed a minute on a cold catalog.
+TIMEOUT="${TIMEOUT:-600}"
 
 # --- Service Mesh Install ---
 # Installs cluster-wide into openshift-operators; the global OperatorGroup already exists.
@@ -52,16 +53,18 @@ EOF
 
   echo "Waiting for Service Mesh ${SERVICE_MESH_VERSION} CSV to reach Succeeded (timeout: ${TIMEOUT}s)..."
   ELAPSED=0
-  until oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; do
-    sleep 10
-    ELAPSED=$(( ELAPSED + 10 ))
-    CSV_STATE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null | grep "${SM_OPERATOR}" | awk '{print $1, $NF}' || true)
-    echo "  [${ELAPSED}s] CSV: ${CSV_STATE:-pending}"
+  # Timeout is checked before sleeping, never between the last sleep and the next
+  # condition test, so a CSV that succeeds on the final tick is not called a failure.
+  while ! oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; do
     if (( ELAPSED >= TIMEOUT )); then
       echo "[ERROR] Service Mesh ${SERVICE_MESH_VERSION} CSV did not reach Succeeded after ${TIMEOUT}s." >&2
       oc get csv -n openshift-operators | grep "${SM_OPERATOR}" || true
       exit 1
     fi
+    sleep 10
+    ELAPSED=$(( ELAPSED + 10 ))
+    CSV_STATE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null | grep "${SM_OPERATOR}" | awk '{print $1, $NF}' || true)
+    echo "  [${ELAPSED}s] CSV: ${CSV_STATE:-pending}"
   done
   echo "[INFO] Service Mesh ${SERVICE_MESH_VERSION} operator installed successfully."
 fi

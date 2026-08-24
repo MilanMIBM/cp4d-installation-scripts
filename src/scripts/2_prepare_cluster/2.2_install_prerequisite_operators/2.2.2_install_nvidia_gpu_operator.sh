@@ -96,15 +96,15 @@ oc patch "${INSTALL_PLAN}" -n "${NAMESPACE}" \
 
 echo "Waiting for GPU Operator pod to become ready (timeout: ${TIMEOUT}s)..."
 ELAPSED=0
-until oc get pod -n "${NAMESPACE}" -l app=gpu-operator --no-headers 2>/dev/null | grep -q .; do
-  sleep 10
-  ELAPSED=$(( ELAPSED + 10 ))
-  CSV_STATE=$(oc get csv -n "${NAMESPACE}" "${STARTING_CSV}" --no-headers 2>/dev/null | awk '{print $1, $NF}')
-  echo "  [${ELAPSED}s] pod not yet created - CSV: ${CSV_STATE:-pending}"
+while ! oc get pod -n "${NAMESPACE}" -l app=gpu-operator --no-headers 2>/dev/null | grep -q .; do
   if (( ELAPSED >= TIMEOUT )); then
     echo "[WARN] GPU Operator pod never appeared in ${NAMESPACE} after ${TIMEOUT}s, continuing."
     exit 0
   fi
+  sleep 10
+  ELAPSED=$(( ELAPSED + 10 ))
+  CSV_STATE=$(oc get csv -n "${NAMESPACE}" "${STARTING_CSV}" --no-headers 2>/dev/null | awk '{print $1, $NF}')
+  echo "  [${ELAPSED}s] pod not yet created - CSV: ${CSV_STATE:-pending}"
 done
 REMAINING=$(( TIMEOUT - ELAPSED ))
 echo "  Pod found after ${ELAPSED}s, waiting for Ready (up to ${REMAINING}s remaining)..."

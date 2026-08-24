@@ -1,4 +1,3 @@
-
 #!/bin/zsh
 # Make this script executable if it isn't already, then re-run it
 if [ ! -x "$0" ]; then chmod +x "$0" && exec "$0" "$@"; fi
@@ -32,19 +31,24 @@ fi
 # Genuine failures still propagate (non-zero exit with no benign marker -> we re-exit).
 run_tolerate_already_installed() {
     local label="$1"; shift
-    local _out _rc _tmp
+    local _out _rc _tmp _rcf
 
     # Capture combined output to a temp file while still streaming it to the
     # console. We deliberately avoid `tee /dev/tty`, which fails when there is
     # no controlling terminal (e.g. when the installer is run non-interactively
-    # or piped), and would otherwise sink the whole pipeline.
+    # or piped), and would otherwise sink the whole pipeline. A `| tee` pipeline
+    # is used rather than `> >(tee ...)`, which is a syntax error under /bin/sh
+    # and is asynchronous even where it parses.
     _tmp="$(mktemp -t apply_output.XXXXXX)"
+    _rcf="$(mktemp -t apply_rc.XXXXXX)"
 
-    # `|| _rc=$?` keeps `set -e` from aborting before we can inspect the result.
-    _rc=0
-    "$@" > >(tee "${_tmp}") 2>&1 || _rc=$?
+    # The command runs on the left of a pipe, i.e. in a subshell, so its exit
+    # status cannot be assigned to a variable here and `pipestatus` is clobbered
+    # by any `||` guard. Stash the status in a sidecar file instead.
+    { "$@" 2>&1; echo $? > "${_rcf}"; } | tee "${_tmp}"
+    _rc="$(cat "${_rcf}")"
     _out="$(cat "${_tmp}")"
-    rm -f "${_tmp}"
+    rm -f "${_tmp}" "${_rcf}"
 
     if [[ "${_rc}" -eq 0 ]]; then
         return 0
@@ -68,7 +72,7 @@ HAS_LICENSING=false
 HAS_SCHEDULER=false
 INSTANCE_COMPONENTS=()
 
-IFS=',' read -ra _all_components <<< "${SOFTWARE_HUB}"
+IFS=',' read -rA _all_components <<< "${SOFTWARE_HUB}"
 for _c in "${_all_components[@]}"; do
     case "${_c}" in
         ibm-licensing) HAS_LICENSING=true ;;
