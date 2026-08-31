@@ -45,6 +45,14 @@ cpd-cli manage case-download \
 
 eval "${OC_LOGIN}"
 
+# Switch to the operands project if the login landed elsewhere. OC_LOGIN leaves
+# the session on whatever project was last used, and the SCC access check below
+# is namespace-scoped.
+if [[ "$(oc project -q 2>/dev/null || true)" != "${PROJECT_CPD_INST_OPERANDS}" ]]; then
+    echo "[INFO] Switching project to ${PROJECT_CPD_INST_OPERANDS}."
+    oc project "${PROJECT_CPD_INST_OPERANDS}" >/dev/null
+fi
+
 oc apply -f "${CPD_CLI_WORK_PATH}/cluster_scoped_resources.yaml" \
     --server-side \
     --force-conflicts
@@ -66,7 +74,32 @@ cpd-cli manage install-components \
     ${PATCH_FLAG[@]+"${PATCH_FLAG[@]}"}
 
 # --- apply the necessary security context level
-oc adm policy add-scc-to-user privileged -z wxd-opensearch-sa -n ${PROJECT_CPD_INST_OPERANDS}
+# The OpenSearch node init container runs as UID 0. Without this grant the
+# StatefulSets never create pods (FailedCreate: "unable to validate against any
+# security context constraint") and the instance silently never comes up.
+OSEARCH_SA="wxd-opensearch-sa"
+OSEARCH_SCC="privileged"
+
+# -n is required: add-scc-to-user creates a namespaced RoleBinding, so the
+# access check must be scoped to that namespace too. Without -n the check runs
+# against whatever project the session is currently on and returns a false "no".
+if oc auth can-i use "scc/${OSEARCH_SCC}" \
+    --as="system:serviceaccount:${PROJECT_CPD_INST_OPERANDS}:${OSEARCH_SA}" \
+    -n ${PROJECT_CPD_INST_OPERANDS} &>/dev/null; then
+    echo "[SKIP] ${OSEARCH_SA} already has the ${OSEARCH_SCC} SCC."
+else
+    echo "[INFO] Granting ${OSEARCH_SCC} SCC to ${OSEARCH_SA}."
+    oc adm policy add-scc-to-user "${OSEARCH_SCC}" -z "${OSEARCH_SA}" -n ${PROJECT_CPD_INST_OPERANDS}
+
+    if ! oc auth can-i use "scc/${OSEARCH_SCC}" \
+        --as="system:serviceaccount:${PROJECT_CPD_INST_OPERANDS}:${OSEARCH_SA}" \
+        -n ${PROJECT_CPD_INST_OPERANDS} &>/dev/null; then
+        echo "[ERROR] Failed to grant ${OSEARCH_SCC} SCC to ${OSEARCH_SA}."
+        echo "[ERROR] OpenSearch pods cannot start without it. Not marking PREP_OPENSEARCH as complete."
+        exit 1
+    fi
+    echo "[OK] Granted ${OSEARCH_SCC} SCC to ${OSEARCH_SA}."
+fi
 
 # --- mark opensearch as prepared in cpd_vars.sh
 CPD_VARS_FILE="${SCRIPT_DIR}/../../cp4d_config/cpd_vars.sh"

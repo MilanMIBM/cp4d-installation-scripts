@@ -270,3 +270,4 @@ postgresql_parsed_conn_credentials/postgresql_on_ibmcloud_connection.json
 postgresql_parsed_conn_credentials/a4c35f59-00d1-4fa3-aefa-0c11bebbd6c3.pem
 mongodb_parsed_conn_credentials/mongodb_on_ibmcloud_connection.json
 mongodb_parsed_conn_credentials/a4c35f59-00d1-4fa3-aefa-0c11bebbd6c3.pem
+/openpages_tests

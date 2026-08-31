@@ -26,6 +26,67 @@ done
 
 eval "${OC_LOGIN}"
 
+# ---
+# Switch to the operands project if the login landed elsewhere. OC_LOGIN leaves
+# the session on whatever project was last used, and several commands below rely
+# on namespace-scoped context (notably the SCC access check).
+
+if [[ "$(oc project -q 2>/dev/null || true)" != "${PROJECT_CPD_INST_OPERANDS}" ]]; then
+    echo "[INFO] Switching project to ${PROJECT_CPD_INST_OPERANDS}."
+    oc project "${PROJECT_CPD_INST_OPERANDS}" >/dev/null
+else
+    echo "[SKIP] Already on project ${PROJECT_CPD_INST_OPERANDS}."
+fi
+
+# ---
+# Ensure wxd-opensearch-sa holds the privileged SCC.
+# The OpenSearch node init container runs as UID 0; without this grant the
+# StatefulSets sit at 0/N with FailedCreate ("unable to validate against any
+# security context constraint") and no pods are ever created. The API then
+# answers 401 via Traefik because there is no backend behind the route.
+
+OSEARCH_SA="wxd-opensearch-sa"
+OSEARCH_SCC="privileged"
+
+echo ""
+echo "=== Verifying ${OSEARCH_SCC} SCC for ${OSEARCH_SA} ==="
+
+# -n is required: add-scc-to-user creates a namespaced RoleBinding, so the
+# access check must be scoped to that namespace too. Without -n the check runs
+# against whatever project the session is currently on and returns a false "no".
+if oc auth can-i use "scc/${OSEARCH_SCC}" \
+    --as="system:serviceaccount:${PROJECT_CPD_INST_OPERANDS}:${OSEARCH_SA}" \
+    -n "${PROJECT_CPD_INST_OPERANDS}" &>/dev/null; then
+    echo "[SKIP] ${OSEARCH_SA} already has the ${OSEARCH_SCC} SCC."
+else
+    echo "[INFO] ${OSEARCH_SA} is missing the ${OSEARCH_SCC} SCC. Applying it now."
+    oc adm policy add-scc-to-user "${OSEARCH_SCC}" -z "${OSEARCH_SA}" -n "${PROJECT_CPD_INST_OPERANDS}"
+
+    if oc auth can-i use "scc/${OSEARCH_SCC}" \
+        --as="system:serviceaccount:${PROJECT_CPD_INST_OPERANDS}:${OSEARCH_SA}" \
+        -n "${PROJECT_CPD_INST_OPERANDS}" &>/dev/null; then
+        echo "[OK] Granted ${OSEARCH_SCC} SCC to ${OSEARCH_SA}."
+
+        # StatefulSets blocked by the missing SCC retry on a backoff that can be
+        # several minutes long. Nudge any that have no ready replicas.
+        # Note: .status.readyReplicas is omitted entirely (not 0) when no pods
+        # exist, so compare desired .spec.replicas against readyReplicas here
+        # rather than filtering on readyReplicas==0 with jsonpath.
+        for STS in $(oc get sts -n "${PROJECT_CPD_INST_OPERANDS}" -o json 2>/dev/null \
+            | jq -r '.items[]
+                     | select(.metadata.name | startswith("opensearch"))
+                     | select((.status.readyReplicas // 0) < (.spec.replicas // 0))
+                     | .metadata.name' || true); do
+            echo "[INFO] Restarting stalled StatefulSet ${STS}."
+            oc rollout restart "sts/${STS}" -n "${PROJECT_CPD_INST_OPERANDS}" || true
+        done
+    else
+        echo "[ERROR] Failed to grant ${OSEARCH_SCC} SCC to ${OSEARCH_SA}."
+        echo "[ERROR] OpenSearch pods cannot start without it. Resolve this before continuing."
+        exit 1
+    fi
+fi
+
 #--------------------------------
 ##### Opensearch uses block storage
 #--------------------------------
@@ -154,6 +215,17 @@ OSEARCH_ROLE_MAPPING_USERS=("kubeadmin" "cpadmin")
 _OSEARCH_ensure_role_mapping() {
     local url="$1" user="$2" pass="$3" principal="$4"
 
+    # The PATCH "add" op below appends unconditionally, so re-running this script
+    # would keep adding duplicate entries. Skip if the principal is already there.
+    local current
+    current=$(curl -sk -u "${user}:${pass}" \
+        "${url}/_plugins/_security/api/rolesmapping/all_access" 2>/dev/null || true)
+    if echo "${current}" | jq -e --arg p "${principal}" \
+        '(.all_access.backend_roles // []) | index($p)' &>/dev/null; then
+        echo "[SKIP] ${principal} already mapped to all_access."
+        return
+    fi
+
     local http_code
     http_code=$(curl -sk -o /dev/null -w "%{http_code}" \
         -u "${user}:${pass}" \
@@ -167,7 +239,8 @@ _OSEARCH_ensure_role_mapping() {
     fi
 
     if [[ "${http_code}" == "401" || "${http_code}" == "403" ]]; then
-        echo "[ERROR] Authentication failed (HTTP ${http_code}) for ${principal}. Check credentials in secret ${CLUSTER_NAME}-user-secret."
+        echo "[ERROR] Authentication failed (HTTP ${http_code}) for ${principal}."
+        echo "[ERROR] The route authenticates via CP4D AMS - check credentials in secret ${CPD_OSEARCH_ADMIN_SECRET:-platform-auth-idp-credentials}."
         return
     fi
 
@@ -211,6 +284,25 @@ else
             continue
         fi
 
+        # The backend route does not terminate at OpenSearch: it passes through
+        # Traefik, whose ForwardAuth middleware delegates to the CP4D AMS service
+        # (/lakehouse/api/v3/auth/authenticate). AMS validates CP4D platform
+        # identities, not OpenSearch's internal user database, so the
+        # <cluster>-user-secret credentials above are rejected with a 401 there.
+        # Use the CP4D IAM admin credentials for anything going over the route.
+        # Note: platform-auth-idp-credentials is the correct source - the
+        # admin-user-details secret holds a different password that AMS rejects.
+        CPD_OSEARCH_ADMIN_SECRET="platform-auth-idp-credentials"
+        CPD_OSEARCH_ADMIN_USER=$(oc get secret "${CPD_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.data.admin_username}' 2>/dev/null | base64 -d || true)
+        CPD_OSEARCH_ADMIN_PASS=$(oc get secret "${CPD_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" \
+            -o jsonpath='{.data.admin_password}' 2>/dev/null | base64 -d || true)
+
+        if [[ -z "${CPD_OSEARCH_ADMIN_USER:-}" || -z "${CPD_OSEARCH_ADMIN_PASS:-}" ]]; then
+            echo "[WARN] Could not retrieve CP4D admin credentials from secret ${CPD_OSEARCH_ADMIN_SECRET}. Skipping ${CLUSTER_NAME}."
+            continue
+        fi
+
         OSEARCH_HOST=$(oc get route "${CLUSTER_NAME}-backend" -n "${PROJECT_CPD_INST_OPERATORS}" \
             --no-headers -o custom-columns=HOST:.spec.host 2>/dev/null || true)
 
@@ -222,7 +314,7 @@ else
         OSEARCH_URL="https://${OSEARCH_HOST}"
 
         for PRINCIPAL in "${OSEARCH_ROLE_MAPPING_USERS[@]}"; do
-            _OSEARCH_ensure_role_mapping "${OSEARCH_URL}" "${OSEARCH_ADMIN_USER}" "${OSEARCH_ADMIN_PASS}" "${PRINCIPAL}"
+            _OSEARCH_ensure_role_mapping "${OSEARCH_URL}" "${CPD_OSEARCH_ADMIN_USER}" "${CPD_OSEARCH_ADMIN_PASS}" "${PRINCIPAL}"
         done
     done
 fi
@@ -251,6 +343,18 @@ if [[ ${#SERVICE_IDS[@]} -gt 0 ]]; then
         echo "[WARN] Could not retrieve admin credentials from secret ${_OSEARCH_ADMIN_SECRET}. OSEARCH_ADMIN_* vars will be empty."
     fi
 
+    # CP4D IAM credentials - required for requests over the backend/dashboards
+    # routes, which authenticate via Traefik ForwardAuth against CP4D AMS rather
+    # than against OpenSearch's internal user database. The OSEARCH_* creds above
+    # only work against the pods directly (e.g. via oc exec).
+    _CPD_OSEARCH_ADMIN_SECRET="platform-auth-idp-credentials"
+    CPD_OSEARCH_ADMIN_USER="$(oc get secret "${_CPD_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.admin_username}' 2>/dev/null | base64 -d || true)"
+    CPD_OSEARCH_ADMIN_PASS="$(oc get secret "${_CPD_OSEARCH_ADMIN_SECRET}" -n "${PROJECT_CPD_INST_OPERANDS}" -o jsonpath='{.data.admin_password}' 2>/dev/null | base64 -d || true)"
+
+    if [[ -z "${CPD_OSEARCH_ADMIN_USER:-}" || -z "${CPD_OSEARCH_ADMIN_PASS:-}" ]]; then
+        echo "[WARN] Could not retrieve CP4D admin credentials from secret ${_CPD_OSEARCH_ADMIN_SECRET}. CPD_OSEARCH_ADMIN_* vars will be empty."
+    fi
+
     OSEARCH_BLOCK="
 # Written by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 export OSEARCH_URL=\"${OSEARCH_URL}\"
@@ -258,7 +362,10 @@ export OSEARCH_DASHBOARDS_URL=\"${OSEARCH_DASHBOARDS_URL}\"
 export OSEARCH_USERNAME=\"${OSEARCH_USERNAME}\"
 export OSEARCH_PASSWORD=\"${OSEARCH_PASSWORD}\"
 export OSEARCH_ADMIN_USERNAME=\"${OSEARCH_ADMIN_USERNAME}\"
-export OSEARCH_ADMIN_PASSWORD=\"${OSEARCH_ADMIN_PASSWORD}\""
+export OSEARCH_ADMIN_PASSWORD=\"${OSEARCH_ADMIN_PASSWORD}\"
+# CP4D IAM credentials - use these for requests over OSEARCH_URL / OSEARCH_DASHBOARDS_URL
+export CPD_OSEARCH_ADMIN_USER=\"${CPD_OSEARCH_ADMIN_USER}\"
+export CPD_OSEARCH_ADMIN_PASS=\"${CPD_OSEARCH_ADMIN_PASS}\""
 
     if [[ -f "${VARS_FILE}" ]]; then
         echo "${OSEARCH_BLOCK}" >> "${VARS_FILE}"
