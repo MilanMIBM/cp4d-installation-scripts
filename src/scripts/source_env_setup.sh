@@ -21,11 +21,49 @@ _source_if_exists() {
     source "$real"
 }
 
-_source_if_exists "${CONFIG_DIR}/cpd_vars.sh"
-_source_if_exists "${CONFIG_DIR}/cpd_instance_details.sh"
-for _f in "${CONFIG_DIR}"/*.sh; do
-    _source_if_exists "$_f"
-done
+# ------------------------------------------------------------------------------
+# Config loading
+# ------------------------------------------------------------------------------
+# Default (ENV_TARGET unset): source every cp4d_config/*.sh, CP4D first. Names
+# defined in more than one file (OCP_URL, OC_LOGIN, STG_CLASS_BLOCK, ...) then
+# resolve to whichever file sorted last.
+#
+# With ENV_TARGET set, ONLY that config is sourced:
+#
+#     ENV_TARGET=confluent source .../source_env_setup.sh
+#
+# so a script targeting a different cluster gets exactly the values in its own
+# config, with nothing from cpd_vars.sh able to override them. ENV_TARGET may be
+# a bare name (confluent -> confluent_vars.sh) or a path to a config file.
+if [[ -n "${ENV_TARGET:-}" ]]; then
+    _target_file="${ENV_TARGET}"
+    [[ -f "${_target_file}" ]] || _target_file="${CONFIG_DIR}/${ENV_TARGET}_vars.sh"
+    [[ -f "${_target_file}" ]] || _target_file="${CONFIG_DIR}/${ENV_TARGET}"
+
+    if [[ ! -f "${_target_file}" ]]; then
+        echo "[ERROR] ENV_TARGET='${ENV_TARGET}' does not resolve to a config file." >&2
+        echo "[ERROR] Tried: ${ENV_TARGET}, ${CONFIG_DIR}/${ENV_TARGET}_vars.sh, ${CONFIG_DIR}/${ENV_TARGET}" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+
+    _source_if_exists "${_target_file}"
+    export ENV_TARGET_FILE="$(cd "$(dirname "${_target_file}")" && pwd)/$(basename "${_target_file}")"
+
+    # Companion instance-details file (e.g. confluent_vars.sh ->
+    # confluent_instance_details.sh), written by the get_instance_details
+    # scripts. Sourced when present so live endpoints are available too.
+    _target_details="${ENV_TARGET_FILE%_vars.sh}_instance_details.sh"
+    [[ "${_target_details}" != "${ENV_TARGET_FILE}" ]] && _source_if_exists "${_target_details}"
+
+    unset _target_file _target_details
+else
+    _source_if_exists "${CONFIG_DIR}/cpd_vars.sh"
+    _source_if_exists "${CONFIG_DIR}/cpd_instance_details.sh"
+    for _f in "${CONFIG_DIR}"/*.sh; do
+        _source_if_exists "$_f"
+    done
+fi
+
 unset _f _sourced
 unset -f _source_if_exists
 
