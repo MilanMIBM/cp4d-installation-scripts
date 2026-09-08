@@ -170,13 +170,29 @@ done
 # exactly as they are, so hand edits survive.
 # ------------------------------------------------------------------------------
 _platform_defaults=(
-    'CONFLUENT_VERSION|8.3.1|# ---- Images ------------------------------------------------------------------
-# Tag applied to every confluentinc/cp-* image. "latest" tracks the newest but rely on a named versiion like 8.3.1
+    'CONFLUENT_VERSION|8.2.0|# ---- Images ------------------------------------------------------------------
+# Tag applied to every confluentinc/cp-* image. "latest" tracks the newest but rely on a named versiion like 8.2.0
 # published build; pin a version (7.5.0, 8.0.0, ...) for a reproducible install.'
     'CONFLUENT_REGISTRY|docker.io/confluentinc|# Registry the cp-* images are pulled from. Override for an air-gapped mirror.'
-    'CONFLUENT_CONNECT_IMAGE|docker.io/cnfldemos/cp-server-connect-datagen:0.6.7-8.0.0|# The Connect image ships from a separate org with the datagen connector baked
+    'CONFLUENT_CONNECT_IMAGE|docker.io/cnfldemos/cp-server-connect-datagen:0.6.4-7.6.0|# The Connect image ships from a separate org with the datagen connector baked
 # in. It publishes NO "latest" tag - every tag is <datagen-version>-<cp-version>
-# - so it is pinned independently of CONFLUENT_VERSION and bumped by hand.'
+# - so it is pinned independently of CONFLUENT_VERSION and bumped by hand.
+#
+# There is no "fuller" stock alternative to switch to: per the Confluent image
+# reference, cp-server-connect and cp-server-connect-base are identical (as are
+# the cp-kafka-connect pair), and none of them bundle any connector - only
+# confluent-hub-client. They differed in the 6.x/7.x era; they no longer do, and
+# the -base names are deprecated in CP 8.3.0 for removal in 8.4.0. Verified on
+# 8.2.0: /usr/share/confluent-hub-components is empty and only the platform
+# libs sit in /usr/share/java.
+#
+# To ship extra connectors, build a derived image - there is no supported
+# runtime install hook:
+#   FROM confluentinc/cp-server-connect:<CONFLUENT_VERSION>
+#   RUN confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.6.7
+#   RUN confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest
+# push it to your registry and point this variable at it. CONNECT_PLUGIN_PATH
+# already covers /usr/share/confluent-hub-components, so nothing else changes.'
     'CONFLUENT_REGISTRY_USER||# Optional credentials for CONFLUENT_REGISTRY. Empty user = anonymous pull.'
     'CONFLUENT_REGISTRY_PASSWORD||'
     'CONFLUENT_PULL_SECRET|confluent-registry|'
@@ -186,6 +202,9 @@ _platform_defaults=(
     'CONFLUENT_INSTALL_KSQLDB|true|'
     'CONFLUENT_INSTALL_REST_PROXY|true|'
     'CONFLUENT_INSTALL_CONTROL_CENTER|true|'
+    'CONFLUENT_MONITORING_NETWORK_POLICY|true|# Restricts Prometheus/Alertmanager ingress to the Confluent pods. They run
+# unauthenticated (as upstream does), so set this to "false" only if something
+# outside the namespace must scrape them.'
     'CONFLUENT_BROKER_INTERNAL_PORT|29092|# ---- Ports (upstream cp-all-in-one compose defaults) -------------------------'
     'CONFLUENT_BROKER_CONTROLLER_PORT|29093|'
     'CONFLUENT_BROKER_EXTERNAL_PORT|9092|'
@@ -198,6 +217,31 @@ _platform_defaults=(
 # Expose the HTTP endpoints of the installed components as OpenShift routes.'
     'CONFLUENT_ROUTE_DOMAIN||# Leave empty to use the cluster'"'"'s default apps domain.'
     'CONFLUENT_ROLLOUT_TIMEOUT|600s|# ---- Waits -------------------------------------------------------------------'
+    'CONFLUENT_AUTH_ENABLED|true|# ---- Web UI authentication ---------------------------------------------------
+# openshift = the Control Center route sits behind an oauth-proxy sidecar and
+#             the cluster login (no password to distribute).
+# basic     = an nginx sidecar terminates HTTP basic auth using the credentials
+#             below. Only this mode reads AUTH_USERNAME/AUTH_PASSWORD.'
+    'CONFLUENT_AUTH_MODE|openshift|'
+    'CONFLUENT_AUTH_SECRET|confluent-auth|'
+    'CONFLUENT_AUTH_USERNAME|${OCP_USERNAME}|# Basic-mode credentials. Username defaults to the OpenShift login user.
+# Leave the password empty to have one generated and stored in the secret above;
+# it is then reused on every later run, so redeploys keep the same credentials.'
+    'CONFLUENT_AUTH_PASSWORD||'
+    'CONFLUENT_AUTH_PASSWORD_LENGTH|24|'
+    'CONFLUENT_SASL_ENABLED|false|# ---- Kafka client authentication (SASL/SCRAM) --------------------------------
+# Independent of the web-UI auth above: this secures the Kafka wire protocol.
+# Enabling it makes the brokers reject unauthenticated clients.'
+    'CONFLUENT_SASL_MECHANISM|SCRAM-SHA-512|'
+    'CONFLUENT_SASL_ADMIN_USER|confluent-admin|'
+    'CONFLUENT_SASL_CLIENTS|app-client|# Comma-separated. One SCRAM credential is minted per name.'
+    'CONFLUENT_SASL_SECRET|confluent-sasl|'
+    'CONFLUENT_C3_VERSION|2.5.0|# ---- Control Center / monitoring ---------------------------------------------
+# C3 next-gen and its Prometheus/Alertmanager ship on their own version line,
+# separate from CONFLUENT_VERSION. All three must match.'
+    'CONFLUENT_PROMETHEUS_PORT|9090|'
+    'CONFLUENT_ALERTMANAGER_PORT|9093|'
+    'CONFLUENT_BROKER_JMX_PORT|9101|'
 )
 
 _backfill=""

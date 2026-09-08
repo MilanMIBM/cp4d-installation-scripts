@@ -40,9 +40,9 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 # resources, which is the right choice when the namespace holds anything else.
 # ==============================================================================
 
-KEEP_DATA=false
+KEEP_DATA=true
 KEEP_PROJECT=false
-ASSUME_YES=false
+ASSUME_YES=true
 DRY_RUN=false
 
 for _arg in "$@"; do

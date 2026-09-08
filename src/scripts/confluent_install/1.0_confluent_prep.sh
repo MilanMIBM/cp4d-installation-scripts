@@ -131,14 +131,15 @@ echo "[INFO] Granted anyuid SCC to serviceaccount/${SA} in ${NS}."
 # The password is generated once and stored in the '${CONFLUENT_AUTH_SECRET}'
 # secret, then reused on later runs so redeploys don't invalidate the
 # credentials people already have.
-if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+: "${CONFLUENT_AUTH_MODE:=openshift}"
+if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "basic" ]]; then
     _auth_user="${CONFLUENT_AUTH_USERNAME}"
     if [[ -z "${_auth_user}" ]]; then
         echo "[ERROR] CONFLUENT_AUTH_USERNAME is empty (it defaults to \$OCP_USERNAME)." >&2
         exit 1
     fi
 
-    # bcrypt is what Prometheus and Alertmanager require for basic_auth_users.
+    # bcrypt is what the C3 nginx auth-gateway requires for its htpasswd file.
     # htpasswd ships with Apache tools and is the only dependency here; the
     # python bcrypt module is not installed in this repo's venv.
     if ! command -v htpasswd >/dev/null 2>&1; then
@@ -156,8 +157,14 @@ if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
     elif $REGENERATE_PASSWORD || [[ -z "${_existing_pw}" ]]; then
         # Alphanumeric plus a small punctuation set: strong, but safe to paste
         # into a URL, a shell, or a YAML file without quoting surprises.
-        _auth_pw="$(LC_ALL=C tr -dc 'A-Za-z0-9._~-' < /dev/urandom \
-            | head -c "${CONFLUENT_AUTH_PASSWORD_LENGTH}")"
+        #
+        # Read a bounded chunk BEFORE filtering. Piping /dev/urandom into `tr`
+        # and closing the pipe with `head -c` kills tr with SIGPIPE, which
+        # `set -o pipefail` turns into exit 141 and aborts the script. 4096
+        # random bytes yield far more than enough usable characters.
+        _auth_pw="$(LC_ALL=C head -c 4096 /dev/urandom \
+            | LC_ALL=C tr -dc 'A-Za-z0-9._~-' \
+            | cut -c1-"${CONFLUENT_AUTH_PASSWORD_LENGTH}")"
         if $REGENERATE_PASSWORD && [[ -n "${_existing_pw}" ]]; then
             _pw_origin="regenerated (previous password discarded)"
             echo "[WARN] Regenerating the basic-auth password. Redeploy the components afterwards:"
@@ -174,12 +181,16 @@ if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
         echo "[WARN] Basic-auth password is only ${#_auth_pw} characters; 16 or more is recommended."
     fi
 
-    # bcrypt hash for Prometheus/Alertmanager web-config basic_auth_users.
+    # bcrypt hash for the C3 nginx auth-gateway's htpasswd file.
     _auth_bcrypt="$(htpasswd -bnBC 10 "${_auth_user}" "${_auth_pw}" 2>/dev/null | cut -d: -f2)"
-    if [[ ! "${_auth_bcrypt}" =~ ^\$2[aby]\$ ]]; then
-        echo "[ERROR] htpasswd did not produce a bcrypt hash (got: '${_auth_bcrypt}')." >&2
-        exit 1
-    fi
+    # A `case` glob, not [[ =~ ]]: in zsh an unquoted \$ inside a regex is not
+    # treated as a literal '$', so the pattern never matches a real bcrypt hash.
+    case "${_auth_bcrypt}" in
+        \$2[aby]\$*) ;;
+        *)
+            echo "[ERROR] htpasswd did not produce a bcrypt hash (got: '${_auth_bcrypt}')." >&2
+            exit 1 ;;
+    esac
 
     oc create secret generic "${CONFLUENT_AUTH_SECRET}" \
         --from-literal=username="${_auth_user}" \
@@ -192,8 +203,119 @@ if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
     echo "[INFO]   username: ${_auth_user}"
     echo "[INFO]   password: read it with -"
     echo "[INFO]     oc get secret ${CONFLUENT_AUTH_SECRET} -n ${NS} -o jsonpath='{.data.password}' | base64 --decode"
+elif [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "openshift" ]]; then
+    # OpenShift-backed UI auth: the service account doubles as the OAuth client.
+    # The redirect reference names the route allowed to receive the callback;
+    # without it the login round-trip is rejected as an unregistered client.
+    oc annotate serviceaccount "${SA}" -n "${NS}" --overwrite \
+        "serviceaccounts.openshift.io/oauth-redirectreference.c3={\"kind\":\"OAuthRedirectReference\",\"apiVersion\":\"v1\",\"reference\":{\"kind\":\"Route\",\"name\":\"control-center\"}}" >/dev/null
+    oc adm policy add-cluster-role-to-user auth-delegator -z "${SA}" -n "${NS}" >/dev/null 2>&1 \
+        || echo "[WARN] Could not grant the auth-delegator cluster role; oauth-proxy may fail to verify tokens."
+
+    # Session cookie key: generated once, reused so sessions survive redeploys.
+    # oauth-proxy requires exactly 16, 24 or 32 bytes for AES.
+    _cookie="$(oc get secret "${CONFLUENT_AUTH_SECRET}-oauth" -n "${NS}" \
+        -o jsonpath='{.data.cookie-secret}' 2>/dev/null | base64 --decode 2>/dev/null || true)"
+    if [[ -z "${_cookie}" ]]; then
+        _cookie="$(LC_ALL=C head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-32)"
+        _cookie_origin="generated"
+    else
+        _cookie_origin="reused"
+    fi
+    oc create secret generic "${CONFLUENT_AUTH_SECRET}-oauth" \
+        --from-literal=cookie-secret="${_cookie}" \
+        -n "${NS}" --dry-run=client -o yaml | oc apply -f - >/dev/null
+
+    echo "[INFO] OpenShift UI auth ready (oauth-proxy; session key ${_cookie_origin})."
+    echo "[INFO]   Users sign in with their OpenShift accounts."
+    echo "[INFO]   Grant access with: oc policy add-role-to-user view <user> -n ${NS}"
 else
     echo "[WARN] CONFLUENT_AUTH_ENABLED=false - the web UIs will be exposed without authentication."
+fi
+
+# ------------------------------------------------------------------------------
+# SASL credentials for Kafka clients
+# ------------------------------------------------------------------------------
+# The admin credential every platform component authenticates as. SCRAM entries
+# must exist in Kafka metadata before the brokers come up as SASL, but on a
+# fresh install there is no cluster to register them against yet - so only the
+# secret is created here. 1.1 registers the SCRAM users once the brokers are up,
+# on the still-PLAINTEXT listener, before switching the listeners over.
+: "${CONFLUENT_SASL_ENABLED:=true}"
+: "${CONFLUENT_SASL_ADMIN_USER:=confluent-admin}"
+: "${CONFLUENT_SASL_SECRET:=confluent-sasl}"
+: "${CONFLUENT_SASL_CLIENTS:=app-client}"
+
+if [[ "${CONFLUENT_SASL_ENABLED}" == "true" ]]; then
+    _sasl_args=()
+    _sasl_new=0
+    for _u in "${CONFLUENT_SASL_ADMIN_USER}" ${=CONFLUENT_SASL_CLIENTS//,/ }; do
+        _p="$(oc get secret "${CONFLUENT_SASL_SECRET}" -n "${NS}" \
+            -o jsonpath="{.data.${_u}}" 2>/dev/null | base64 --decode 2>/dev/null || true)"
+        if [[ -z "${_p}" ]]; then
+            _p="$(LC_ALL=C head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9._~-' | cut -c1-24)"
+            _sasl_new=$(( _sasl_new + 1 ))
+        fi
+        _sasl_args+=(--from-literal="${_u}=${_p}")
+    done
+    oc create secret generic "${CONFLUENT_SASL_SECRET}" "${_sasl_args[@]}" \
+        -n "${NS}" --dry-run=client -o yaml | oc apply -f - >/dev/null
+    echo "[INFO] SASL credentials ready in secret '${CONFLUENT_SASL_SECRET}' (${_sasl_new} newly generated)."
+    echo "[INFO]   admin: ${CONFLUENT_SASL_ADMIN_USER}   clients: ${CONFLUENT_SASL_CLIENTS}"
+else
+    echo "[WARN] CONFLUENT_SASL_ENABLED=false - Kafka will accept unauthenticated clients."
+fi
+
+# ------------------------------------------------------------------------------
+# Monitoring network policy
+# ------------------------------------------------------------------------------
+# Prometheus and Alertmanager run unauthenticated, matching upstream
+# cp-all-in-one: their images take no credentials and C3 queries them with
+# none. Neither gets a route, so they are pod-network-only - but OpenShift
+# permits cross-namespace pod traffic by default, which would let any pod on
+# the cluster read the metrics and, more importantly, POST to Alertmanager's
+# API to create silences.
+#
+# Restricting ingress to the Confluent pods closes that without introducing a
+# credential to render, rotate, or get wrong. The selector covers both callers:
+# C3's queries and the brokers' OTLP push both carry part-of=confluent.
+#
+# Set CONFLUENT_MONITORING_NETWORK_POLICY=false if something outside this
+# namespace must scrape these (a cluster monitoring stack, an external
+# Grafana); that traffic would otherwise be dropped.
+: "${CONFLUENT_MONITORING_NETWORK_POLICY:=true}"
+# Defaulted rather than assumed present: set -u is active, and a config file
+# generated before this key existed would otherwise abort the run.
+: "${CONFLUENT_INSTALL_CONTROL_CENTER:=true}"
+if [[ "${CONFLUENT_INSTALL_CONTROL_CENTER}" == "true" \
+   && "${CONFLUENT_MONITORING_NETWORK_POLICY}" == "true" ]]; then
+    oc apply -f - >/dev/null <<EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-internal
+  namespace: ${NS}
+  labels:
+    app.kubernetes.io/part-of: confluent
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [prometheus, alertmanager]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: confluent
+EOF
+    echo "[INFO] NetworkPolicy 'monitoring-internal' applied: Prometheus/Alertmanager accept traffic from Confluent pods only."
+else
+    oc delete networkpolicy monitoring-internal -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+    if [[ "${CONFLUENT_INSTALL_CONTROL_CENTER}" == "true" ]]; then
+        echo "[WARN] CONFLUENT_MONITORING_NETWORK_POLICY=false - Prometheus/Alertmanager are reachable from any pod on the cluster."
+    fi
 fi
 
 # ------------------------------------------------------------------------------

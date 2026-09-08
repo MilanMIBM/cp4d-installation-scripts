@@ -64,23 +64,36 @@ oc project "${NS}" >/dev/null
 # Basic-auth credentials, provisioned by 1.0_confluent_prep.sh
 # ------------------------------------------------------------------------------
 # Read back from the secret rather than regenerated here, so repeated installs
-# keep the same credentials. The bcrypt hash feeds the Prometheus/Alertmanager
-# web configs; the plaintext password feeds C3's JAAS property file (Jetty's
-# PropertyFileLoginModule has no bcrypt support) and Prometheus scrape configs.
+# keep the same credentials. The bcrypt hash feeds the nginx auth-gateway's
+# htpasswd file; the plaintext password is what the operator types into the UI
+# and is echoed in the summary at the end of this script.
+#
+# Only read in basic mode - openshift mode stores an oauth-proxy cookie secret
+# in a different secret and leaves these empty.
 AUTH_USER=""
 AUTH_PASS=""
 AUTH_BCRYPT=""
-if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "basic" ]]; then
     AUTH_USER="$(oc get secret "${CONFLUENT_AUTH_SECRET}" -n "${NS}" -o jsonpath='{.data.username}' 2>/dev/null | base64 --decode || true)"
     AUTH_PASS="$(oc get secret "${CONFLUENT_AUTH_SECRET}" -n "${NS}" -o jsonpath='{.data.password}' 2>/dev/null | base64 --decode || true)"
     AUTH_BCRYPT="$(oc get secret "${CONFLUENT_AUTH_SECRET}" -n "${NS}" -o jsonpath='{.data.bcrypt}' 2>/dev/null | base64 --decode || true)"
 
     if [[ -z "${AUTH_USER}" || -z "${AUTH_PASS}" || -z "${AUTH_BCRYPT}" ]]; then
-        echo "[ERROR] CONFLUENT_AUTH_ENABLED=true but secret '${CONFLUENT_AUTH_SECRET}' is missing or incomplete in ${NS}." >&2
+        echo "[ERROR] CONFLUENT_AUTH_MODE=basic but secret '${CONFLUENT_AUTH_SECRET}' is missing or incomplete in ${NS}." >&2
         echo "[ERROR] Run 1.0_confluent_prep.sh first." >&2
         exit 1
     fi
     echo "[INFO] Basic auth enabled for the web UIs (user: ${AUTH_USER})."
+elif [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+    # openshift mode: 1.0 writes the oauth-proxy session key instead of the
+    # basic-auth trio. Nothing is read back - the gateway mounts the secret
+    # directly - so only its existence is checked.
+    if ! oc get secret "${CONFLUENT_AUTH_SECRET}-oauth" -n "${NS}" &>/dev/null; then
+        echo "[ERROR] CONFLUENT_AUTH_MODE=openshift but secret '${CONFLUENT_AUTH_SECRET}-oauth' is missing in ${NS}." >&2
+        echo "[ERROR] Run 1.0_confluent_prep.sh first." >&2
+        exit 1
+    fi
+    echo "[INFO] OpenShift OAuth enabled for the Control Center UI."
 else
     echo "[WARN] CONFLUENT_AUTH_ENABLED=false - web UIs will be deployed without authentication."
 fi
@@ -93,6 +106,151 @@ ALERTMANAGER_URL="http://alertmanager:${CONFLUENT_ALERTMANAGER_PORT}"
 # specific partition leader. The 'broker' ClusterIP + PLAINTEXT_HOST pair
 # cannot: that listener advertises the service name for every broker, so a
 # leader-directed produce lands on a random pod (NOT_LEADER_OR_FOLLOWER).
+# ------------------------------------------------------------------------------
+# SASL (Kafka client authentication), provisioned by x.2_confluent_add_sasl.sh
+# ------------------------------------------------------------------------------
+# When enabled the broker listeners become SASL_PLAINTEXT and every component
+# must present the admin credential. The credential is read back from the secret
+# so repeated installs keep the same one.
+: "${CONFLUENT_SASL_ENABLED:=false}"
+: "${CONFLUENT_SASL_MECHANISM:=SCRAM-SHA-512}"
+: "${CONFLUENT_SASL_ADMIN_USER:=confluent-admin}"
+: "${CONFLUENT_SASL_SECRET:=confluent-sasl}"
+
+_broker_protocol_map="CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+_broker_sasl_env=""
+_client_sasl_env=""
+_connect_sasl_env=""
+_ksql_sasl_env=""
+_c3_sasl_env=""
+
+if [[ "${CONFLUENT_SASL_ENABLED}" == "true" ]]; then
+    SASL_ADMIN_PW="$(oc get secret "${CONFLUENT_SASL_SECRET}" -n "${NS}" \
+        -o jsonpath="{.data.${CONFLUENT_SASL_ADMIN_USER}}" 2>/dev/null | base64 --decode || true)"
+    if [[ -z "${SASL_ADMIN_PW}" ]]; then
+        echo "[ERROR] CONFLUENT_SASL_ENABLED=true but secret '${CONFLUENT_SASL_SECRET}' has no" >&2
+        echo "[ERROR] entry for '${CONFLUENT_SASL_ADMIN_USER}'. Run x.2_confluent_add_sasl.sh first." >&2
+        exit 1
+    fi
+
+    # The controller listener stays PLAINTEXT: it is pod-network-internal and
+    # KRaft quorum traffic authenticating against SCRAM stored in the very
+    # metadata log it is trying to form is a bootstrapping deadlock.
+    _broker_protocol_map="CONTROLLER:PLAINTEXT,PLAINTEXT:SASL_PLAINTEXT,PLAINTEXT_HOST:SASL_PLAINTEXT"
+
+    # Emitted into a single-quoted YAML scalar, so the double quotes JAAS
+    # requires are literal here. Escaping them (\\") would put real backslashes
+    # in the value and Kafka would fail to parse the login module.
+    _jaas="org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CONFLUENT_SASL_ADMIN_USER}\" password=\"${SASL_ADMIN_PW}\";"
+
+    _broker_sasl_env="
+            - name: KAFKA_SASL_ENABLED_MECHANISMS
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: KAFKA_LISTENER_NAME_PLAINTEXT_${CONFLUENT_SASL_MECHANISM//-/_}_SASL_JAAS_CONFIG
+              value: '${_jaas}'
+            - name: KAFKA_LISTENER_NAME_PLAINTEXT__HOST_${CONFLUENT_SASL_MECHANISM//-/_}_SASL_JAAS_CONFIG
+              value: '${_jaas}'
+            - name: KAFKA_SUPER_USERS
+              value: 'User:${CONFLUENT_SASL_ADMIN_USER}'"
+
+    # Plain Kafka clients (Schema Registry, REST Proxy) take the standard
+    # security.protocol/sasl.* trio under their own env prefix.
+    _client_sasl_env="
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
+              value: '${_jaas}'"
+
+    _restproxy_sasl_env="
+            - name: KAFKA_REST_CLIENT_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: KAFKA_REST_CLIENT_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: KAFKA_REST_CLIENT_SASL_JAAS_CONFIG
+              value: '${_jaas}'"
+
+    # Connect needs the settings three times: worker, producer and consumer.
+    _connect_sasl_env="
+            - name: CONNECT_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: CONNECT_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: CONNECT_SASL_JAAS_CONFIG
+              value: '${_jaas}'
+            - name: CONNECT_PRODUCER_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: CONNECT_PRODUCER_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: CONNECT_PRODUCER_SASL_JAAS_CONFIG
+              value: '${_jaas}'
+            - name: CONNECT_CONSUMER_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: CONNECT_CONSUMER_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: CONNECT_CONSUMER_SASL_JAAS_CONFIG
+              value: '${_jaas}'"
+
+    _ksql_sasl_env="
+            - name: KSQL_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: KSQL_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: KSQL_SASL_JAAS_CONFIG
+              value: '${_jaas}'"
+
+    # C3 talks to Kafka through Streams, and also as a plain admin client.
+    _c3_sasl_env="
+            - name: CONTROL_CENTER_STREAMS_SECURITY_PROTOCOL
+              value: 'SASL_PLAINTEXT'
+            - name: CONTROL_CENTER_STREAMS_SASL_MECHANISM
+              value: '${CONFLUENT_SASL_MECHANISM}'
+            - name: CONTROL_CENTER_STREAMS_SASL_JAAS_CONFIG
+              value: '${_jaas}'"
+
+    # Chicken-and-egg: the brokers cannot come up SASL-only until the SCRAM
+    # users exist, and the users can only be written to a running cluster. On an
+    # existing PLAINTEXT cluster we register them now, before the listeners flip.
+    # On a fresh install there is nothing to talk to yet, so the brokers are
+    # brought up PLAINTEXT first, the users are registered, and the SASL
+    # listeners are applied on a second pass (see _sasl_deferred below).
+    _sasl_deferred=false
+    if oc get statefulset broker -n "${NS}" &>/dev/null \
+       && [[ "$(oc get statefulset broker -n "${NS}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)" -ge 1 ]] 2>/dev/null; then
+        echo "[INFO] Registering SCRAM users on the running cluster..."
+        _sasl_reg_ok=true
+        for _u in "${CONFLUENT_SASL_ADMIN_USER}" ${=${CONFLUENT_SASL_CLIENTS:-app-client}//,/ }; do
+            _up="$(oc get secret "${CONFLUENT_SASL_SECRET}" -n "${NS}" \
+                -o jsonpath="{.data.${_u}}" 2>/dev/null | base64 --decode 2>/dev/null || true)"
+            [[ -z "${_up}" ]] && continue
+            oc exec broker-0 -n "${NS}" -- kafka-configs \
+                --bootstrap-server "localhost:${CONFLUENT_BROKER_INTERNAL_PORT}" \
+                --alter --add-config "${CONFLUENT_SASL_MECHANISM}=[password=${_up}]" \
+                --entity-type users --entity-name "${_u}" >/dev/null 2>&1 \
+                || { _sasl_reg_ok=false; break; }
+        done
+        if ! $_sasl_reg_ok; then
+            echo "[WARN] Could not register SCRAM users (the cluster may already be SASL-only)."
+            echo "[WARN] Continuing; if the brokers fail to authenticate, run x.2_confluent_add_sasl.sh."
+        fi
+    else
+        # Fresh cluster: defer SASL to a second pass so the brokers can form.
+        _sasl_deferred=true
+        _broker_protocol_map="CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+        _broker_sasl_env=""
+        _client_sasl_env=""; _restproxy_sasl_env=""; _connect_sasl_env=""
+        _ksql_sasl_env=""; _c3_sasl_env=""
+        echo "[INFO] Fresh cluster: bringing brokers up PLAINTEXT first; SASL is applied on a second pass."
+    fi
+
+    echo "[INFO] SASL enabled (${CONFLUENT_SASL_MECHANISM}, admin user ${CONFLUENT_SASL_ADMIN_USER})."
+else
+    _restproxy_sasl_env=""
+fi
+
 BOOTSTRAP="broker-headless:${CONFLUENT_BROKER_INTERNAL_PORT}"
 SR_URL="http://schema-registry:${CONFLUENT_SCHEMA_REGISTRY_PORT}"
 
@@ -136,7 +294,10 @@ ${host_line}
     kind: Service
     name: ${name}
   port:
-    targetPort: ${port}
+    # The service's port NAME, not a number: when a component puts an auth
+    # gateway in front, the service's targetPort is the gateway's port and a
+    # numeric targetPort here no longer resolves, leaving the route on 503.
+    targetPort: http
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
@@ -256,7 +417,7 @@ spec:
             - name: KAFKA_PROCESS_ROLES
               value: 'broker,controller'
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+              value: '${_broker_protocol_map}'
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: 'PLAINTEXT'
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
@@ -283,7 +444,7 @@ spec:
             - name: KAFKA_LOG_DIRS
               value: '/var/lib/kafka/data/logs'
             - name: CLUSTER_ID
-              value: '${CONFLUENT_CLUSTER_ID}'
+              value: '${CONFLUENT_CLUSTER_ID}'${_broker_sasl_env}
             - name: KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL
               value: '${SR_URL}'
             - name: CONFLUENT_METRICS_ENABLE
@@ -435,7 +596,7 @@ spec:
             - name: SCHEMA_REGISTRY_LISTENERS
               value: http://0.0.0.0:${CONFLUENT_SCHEMA_REGISTRY_PORT}
             - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR
-              value: '${CONFLUENT_REPLICATION_FACTOR}'
+              value: '${CONFLUENT_REPLICATION_FACTOR}'${_client_sasl_env}
           readinessProbe:
             httpGet:
               path: /subjects
@@ -544,7 +705,7 @@ spec:
             - name: CONNECT_PLUGIN_PATH
               value: '/usr/share/java,/usr/share/confluent-hub-components'
             - name: CONNECT_LOG4J_LOGGERS
-              value: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+              value: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR${_connect_sasl_env}
           readinessProbe:
             httpGet:
               path: /connectors
@@ -634,7 +795,7 @@ spec:
             - name: KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE
               value: 'true'
             - name: KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE
-              value: 'true'
+              value: 'true'${_ksql_sasl_env}
           readinessProbe:
             httpGet:
               path: /info
@@ -712,7 +873,7 @@ spec:
             - name: KAFKA_REST_LISTENERS
               value: http://0.0.0.0:${CONFLUENT_REST_PROXY_PORT}
             - name: KAFKA_REST_SCHEMA_REGISTRY_URL
-              value: '${SR_URL}'
+              value: '${SR_URL}'${_restproxy_sasl_env}
           readinessProbe:
             httpGet:
               path: /topics
@@ -750,35 +911,19 @@ fi
 # ==============================================================================
 if [[ "${CONFLUENT_INSTALL_CONTROL_CENTER}" == "true" ]]; then
     # --------------------------------------------------------------------------
-    # Basic-auth fragments spliced into the monitoring ConfigMap.
+    # Prometheus and Alertmanager are deliberately left unauthenticated.
     #
-    # Prometheus and Alertmanager read basic_auth_users from a web config file
-    # (bcrypt hashes). Once Alertmanager is protected, Prometheus must also
-    # present credentials when it pushes alerts to it. Both fragments are empty
-    # when auth is disabled, which reproduces the upstream open configuration.
-    # The 4-space indent matches the ConfigMap's block-scalar body.
+    # Neither gets a route (expose_route is only called for the component UIs),
+    # so both are reachable on the pod network only. Basic auth here was
+    # guarding a surface that is never exposed, while costing a web config file
+    # per component, credentialed probes, and credentialed alert delivery from
+    # Prometheus to Alertmanager - all of which had to render correctly or the
+    # process refused to start.
+    #
+    # To close off cross-namespace pod traffic, restrict ingress to the
+    # Confluent pods with a NetworkPolicy rather than credentials; C3's queries
+    # and the brokers' OTLP push both carry app.kubernetes.io/part-of=confluent.
     # --------------------------------------------------------------------------
-    if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
-        _web_config_prom="    basic_auth_users:
-      ${AUTH_USER}: '${AUTH_BCRYPT}'"
-        _web_config_am="    basic_auth_users:
-      ${AUTH_USER}: '${AUTH_BCRYPT}'"
-        _prom_alerting_auth="
-          basic_auth:
-            username: '${AUTH_USER}'
-            password: '${AUTH_PASS}'"
-        # Prometheus does not document /-/ready as exempt from basic auth, so
-        # the probes authenticate rather than relying on it.
-        _monitoring_probe_headers="
-              httpHeaders:
-                - name: Authorization
-                  value: Basic $(printf '%s:%s' "${AUTH_USER}" "${AUTH_PASS}" | base64 | tr -d '\n')"
-    else
-        _web_config_prom="    {}"
-        _web_config_am="    {}"
-        _prom_alerting_auth=""
-        _monitoring_probe_headers=""
-    fi
 
     apply_component monitoring-config <<EOF
 apiVersion: v1
@@ -797,7 +942,7 @@ data:
       alertmanagers:
         - static_configs:
             - targets:
-                - alertmanager:${CONFLUENT_ALERTMANAGER_PORT}${_prom_alerting_auth}
+                - alertmanager:${CONFLUENT_ALERTMANAGER_PORT}
     rule_files:
       - 'recording_rules-generated.yml'
       - 'trigger_rules-generated.yml'
@@ -856,10 +1001,8 @@ data:
     route:
       receiver: default
       routes: []
-  web-config-prom.yml: |
-${_web_config_prom}
-  web-config-am.yml: |
-${_web_config_am}
+  web-config-prom.yml: ''
+  web-config-am.yml: ''
 EOF
 
     apply_component prometheus <<EOF
@@ -931,7 +1074,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /-/ready
-              port: ${CONFLUENT_PROMETHEUS_PORT}${_monitoring_probe_headers}
+              port: ${CONFLUENT_PROMETHEUS_PORT}
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 30
@@ -1018,7 +1161,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /-/ready
-              port: ${CONFLUENT_ALERTMANAGER_PORT}${_monitoring_probe_headers}
+              port: ${CONFLUENT_ALERTMANAGER_PORT}
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 30
@@ -1048,15 +1191,22 @@ if [[ "${CONFLUENT_INSTALL_CONTROL_CENTER}" == "true" ]]; then
     # --------------------------------------------------------------------------
     # Control Center auth.
     #
-    # Two separate concerns:
-    #   1. C3's own UI login - Jetty BASIC auth against a JAAS property file.
-    #      PropertyFileLoginModule reads plaintext "user: password,role", so the
-    #      password (not the bcrypt hash) goes here; the file arrives via a
-    #      projected secret, never in the ConfigMap.
-    #   2. C3 calling Prometheus/Alertmanager, which are now protected - the
-    #      *.basic.auth.user.info properties carry "user:password".
+    # Prometheus and Alertmanager are unauthenticated on the pod network, so C3
+    # needs no credentials to query them - the *.basic.auth.user.info
+    # properties are deliberately absent.
+    #
+    # C3's OWN UI is NOT protected in-process. A JAAS property file
+    # (-Djava.security.auth.login.config) cannot be used: the next-gen image
+    # ships jetty-security but not the jetty-jaas module, so
+    # PropertyFileLoginModule is absent and cannot authenticate anyone.
+    #
+    # The UI is instead protected by the nginx auth-gateway sidecar below, which
+    # owns the port the Service and route point at.
     # --------------------------------------------------------------------------
-    if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+    if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "basic" ]]; then
+        # REST_AUTHENTICATION_METHOD=BASIC is kept: without it C3 stalls during
+        # REST init and never binds its port. It gives C3 an auth realm; the
+        # actual UI credential check is done by the nginx gateway in front.
         _c3_auth_env="
             - name: CONTROL_CENTER_REST_AUTHENTICATION_METHOD
               value: 'BASIC'
@@ -1065,43 +1215,183 @@ if [[ "${CONFLUENT_INSTALL_CONTROL_CENTER}" == "true" ]]; then
             - name: CONTROL_CENTER_REST_AUTHENTICATION_ROLES
               value: 'Administrators'
             - name: CONTROL_CENTER_AUTH_RESTRICTED_ROLES
-              value: 'Restricted'
-            - name: CONTROL_CENTER_PROMETHEUS_BASIC_AUTH_USER_INFO
-              value: '${AUTH_USER}:${AUTH_PASS}'
-            - name: CONTROL_CENTER_ALERTMANAGER_BASIC_AUTH_USER_INFO
-              value: '${AUTH_USER}:${AUTH_PASS}'
-            - name: CONTROL_CENTER_OPTS
-              value: '-Djava.security.auth.login.config=/mnt/auth/c3.jaas'"
-        _c3_auth_mount="
-            - name: auth
-              mountPath: /mnt/auth
-              readOnly: true"
-        _c3_auth_volume="
-        - name: auth
-          secret:
-            secretName: ${CONFLUENT_AUTH_SECRET}-c3
-            defaultMode: 0400"
-        # The readiness probe must authenticate too, or C3 never goes Ready.
-        _c3_probe_headers="
-              httpHeaders:
-                - name: Authorization
-                  value: Basic $(printf '%s:%s' "${AUTH_USER}" "${AUTH_PASS}" | base64 | tr -d '\n')"
-
-        # The JAAS module resolves 'file=' at login time, so both files live in
-        # one secret mounted at /mnt/auth.
-        oc create secret generic "${CONFLUENT_AUTH_SECRET}-c3" \
-            --from-literal=c3.jaas="c3 {
-    org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule required
-    file=\"/mnt/auth/c3-users.properties\";
-};" \
-            --from-literal=c3-users.properties="${AUTH_USER}: ${AUTH_PASS},Administrators" \
-            -n "${NS}" --dry-run=client -o yaml | oc apply -f - >/dev/null
-        echo "[INFO] Control Center JAAS credentials written to secret '${CONFLUENT_AUTH_SECRET}-c3'."
+              value: 'Restricted'"
     else
         _c3_auth_env=""
-        _c3_auth_mount=""
-        _c3_auth_volume=""
-        _c3_probe_headers=""
+    fi
+    # C3 itself serves 9021 unauthenticated inside the pod, so its probe needs
+    # no credentials regardless of the auth setting.
+    _c3_auth_mount=""
+    _c3_auth_volume=""
+    _c3_probe_headers=""
+
+    # The JAAS secret is no longer used; remove any left by an earlier install.
+    oc delete secret "${CONFLUENT_AUTH_SECRET}-c3" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+
+    # --------------------------------------------------------------------------
+    # Basic-auth gateway for the C3 UI.
+    #
+    # A small nginx sidecar terminates basic auth and proxies to C3 on
+    # localhost, so the route targets the gateway port and C3's own port is
+    # never exposed outside the pod. nginx reads the bcrypt hash minted by
+    # 1.0_confluent_prep.sh, so there is one credential everywhere.
+    # --------------------------------------------------------------------------
+    if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "openshift" ]]; then
+        # ----------------------------------------------------------------------
+        # OpenShift-backed auth: oauth-proxy in front of C3.
+        #
+        # Set up by x.2_confluent_add_auth_openshift.sh, which registers the
+        # service account as an OAuth client. --openshift-sar restricts access
+        # to users who can read services in this namespace, so UI access is
+        # granted with `oc policy add-role-to-user`, not a shared password.
+        # ----------------------------------------------------------------------
+        : "${CONFLUENT_C3_GATEWAY_PORT:=8443}"
+        : "${CONFLUENT_C3_OAUTH_PROXY_IMAGE:=image-registry.openshift-image-registry.svc:5000/openshift/oauth-proxy:v4.4}"
+
+        # Remove the basic-auth gateway's resources so the two modes cannot
+        # both be half-configured.
+        oc delete secret "${CONFLUENT_AUTH_SECRET}-gateway" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+
+        _sar="{\"namespace\":\"${NS}\",\"resource\":\"services\",\"verb\":\"get\"}"
+        _c3_gateway_container="
+        - name: oauth-proxy
+          image: ${CONFLUENT_C3_OAUTH_PROXY_IMAGE}
+          args:
+            - --provider=openshift
+            - --https-address=
+            - --http-address=:${CONFLUENT_C3_GATEWAY_PORT}
+            - --upstream=http://127.0.0.1:${CONFLUENT_CONTROL_CENTER_PORT}
+            - --openshift-service-account=${SA}
+            - --openshift-sar=${_sar}
+            - --cookie-secret-file=/etc/proxy/secrets/cookie-secret
+            - --skip-provider-button=true
+            # C3's WebSockets ride the same upstream; the proxy passes them
+            # through on an authenticated session cookie, so unlike basic auth
+            # there is no handshake-credential problem here.
+            - --pass-access-token=false
+            - --skip-auth-regex=^/healthz\$
+          ports:
+            - containerPort: ${CONFLUENT_C3_GATEWAY_PORT}
+          volumeMounts:
+            - name: oauth-secret
+              mountPath: /etc/proxy/secrets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /oauth/healthz
+              port: ${CONFLUENT_C3_GATEWAY_PORT}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: '50m'
+              memory: '64Mi'
+            limits:
+              cpu: '200m'
+              memory: '256Mi'"
+        _c3_gateway_volumes="
+        - name: oauth-secret
+          secret:
+            secretName: ${CONFLUENT_AUTH_SECRET}-oauth"
+        _c3_service_port="${CONFLUENT_C3_GATEWAY_PORT}"
+    elif [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+        : "${CONFLUENT_C3_GATEWAY_PORT:=8443}"
+        : "${CONFLUENT_C3_GATEWAY_IMAGE:=registry.access.redhat.com/ubi9/nginx-124:latest}"
+
+        # Remove the OpenShift-auth resources so the modes stay exclusive.
+        oc delete secret "${CONFLUENT_AUTH_SECRET}-oauth" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+
+        oc create secret generic "${CONFLUENT_AUTH_SECRET}-gateway" \
+            --from-literal=htpasswd="${AUTH_USER}:${AUTH_BCRYPT}" \
+            --from-literal=nginx.conf="worker_processes 1;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+events { worker_connections 1024; }
+http {
+  access_log off;
+  client_body_temp_path /tmp/client_body;
+  proxy_temp_path /tmp/proxy;
+  fastcgi_temp_path /tmp/fastcgi;
+  uwsgi_temp_path /tmp/uwsgi;
+  scgi_temp_path /tmp/scgi;
+  server {
+    listen ${CONFLUENT_C3_GATEWAY_PORT};
+    # Unauthenticated health endpoint so the kubelet probe does not need
+    # credentials embedded in the pod spec.
+    location = /healthz { return 200 'ok'; add_header Content-Type text/plain; }
+    location / {
+      # Browsers cannot attach basic-auth credentials to a WebSocket handshake,
+      # so challenging one makes the browser pop its login dialog on every
+      # reconnect - which is what C3's UI does continuously. \$auth_realm is
+      # empty ('off') for upgrade requests, exempting only those. They are not
+      # an open door: the handshake still has to come from a page the user
+      # already authenticated to load.
+      auth_basic \$auth_realm;
+      auth_basic_user_file /etc/nginx/auth/htpasswd;
+      proxy_pass http://127.0.0.1:${CONFLUENT_CONTROL_CENTER_PORT};
+      proxy_set_header Host \$host;
+      proxy_set_header X-Real-IP \$remote_addr;
+      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto \$scheme;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade \$http_upgrade;
+      proxy_set_header Connection \$connection_upgrade_val;
+      proxy_read_timeout 300s;
+    }
+  }
+  map \$http_upgrade \$connection_upgrade_val { default upgrade; '' close; }
+  # 'off' disables auth_basic for that request; any other value is the realm.
+  map \$http_upgrade \$auth_realm { default 'off'; '' 'Confluent Control Center'; }
+}" \
+            -n "${NS}" --dry-run=client -o yaml | oc apply -f - >/dev/null
+        echo "[INFO] C3 basic-auth gateway config written to secret '${CONFLUENT_AUTH_SECRET}-gateway'."
+
+        _c3_gateway_container="
+        - name: auth-gateway
+          image: ${CONFLUENT_C3_GATEWAY_IMAGE}
+          command: ['nginx', '-c', '/etc/nginx/conf/nginx.conf', '-g', 'daemon off;']
+          ports:
+            - containerPort: ${CONFLUENT_C3_GATEWAY_PORT}
+          volumeMounts:
+            - name: gateway-conf
+              mountPath: /etc/nginx/conf
+              readOnly: true
+            - name: gateway-auth
+              mountPath: /etc/nginx/auth
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: ${CONFLUENT_C3_GATEWAY_PORT}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: '50m'
+              memory: '64Mi'
+            limits:
+              cpu: '200m'
+              memory: '256Mi'"
+        _c3_gateway_volumes="
+        - name: gateway-conf
+          secret:
+            secretName: ${CONFLUENT_AUTH_SECRET}-gateway
+            items:
+              - key: nginx.conf
+                path: nginx.conf
+        - name: gateway-auth
+          secret:
+            secretName: ${CONFLUENT_AUTH_SECRET}-gateway
+            items:
+              - key: htpasswd
+                path: htpasswd"
+        _c3_service_port="${CONFLUENT_C3_GATEWAY_PORT}"
+    else
+        oc delete secret "${CONFLUENT_AUTH_SECRET}-gateway" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+        _c3_gateway_container=""
+        _c3_gateway_volumes=""
+        _c3_service_port="${CONFLUENT_CONTROL_CENTER_PORT}"
     fi
 
     apply_component control-center <<EOF
@@ -1118,7 +1408,9 @@ spec:
   ports:
     - name: http
       port: ${CONFLUENT_CONTROL_CENTER_PORT}
-      targetPort: ${CONFLUENT_CONTROL_CENTER_PORT}
+      # Points at the auth gateway when authentication is on, so the route
+      # cannot reach C3's unauthenticated port directly.
+      targetPort: ${_c3_service_port}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -1130,6 +1422,12 @@ metadata:
     app.kubernetes.io/part-of: confluent
 spec:
   replicas: 1
+  # Recreate, not RollingUpdate: C3 is a singleton Kafka Streams app. Under a
+  # rolling update the new pod blocks waiting for stream partitions the old pod
+  # still holds, while the old pod is kept alive because the new one never goes
+  # Ready - a deadlock that stalls the rollout indefinitely.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: control-center
@@ -1197,7 +1495,7 @@ spec:
             - name: CONTROL_CENTER_ALERTMANAGER_CONFIG_FILE
               value: /mnt/config/alertmanager-generated.yml
             - name: PORT
-              value: '${CONFLUENT_CONTROL_CENTER_PORT}'${_c3_auth_env}
+              value: '${CONFLUENT_CONTROL_CENTER_PORT}'${_c3_auth_env}${_c3_sasl_env}
           volumeMounts:
             - name: config
               mountPath: /mnt/config${_c3_auth_mount}
@@ -1214,13 +1512,13 @@ spec:
               memory: "${CONFLUENT_COMPONENT_MEM_REQUEST}"
             limits:
               cpu: "${CONFLUENT_COMPONENT_CPU_LIMIT}"
-              memory: "${CONFLUENT_COMPONENT_MEM_LIMIT}"
+              memory: "${CONFLUENT_COMPONENT_MEM_LIMIT}"${_c3_gateway_container}
       volumes:
         - name: config-src
           configMap:
             name: confluent-monitoring-config
         - name: config
-          emptyDir: {}${_c3_auth_volume}
+          emptyDir: {}${_c3_auth_volume}${_c3_gateway_volumes}
 EOF
     wait_rollout deployment control-center
     expose_route control-center "${CONFLUENT_CONTROL_CENTER_PORT}"
@@ -1232,12 +1530,42 @@ fi
 # Summary
 # ==============================================================================
 echo ""
+# ------------------------------------------------------------------------------
+# Second pass: the cluster was created PLAINTEXT because SCRAM users cannot be
+# written to a cluster that does not exist yet. Now that it is up, register them
+# and re-run this script so the listeners come back as SASL.
+# ------------------------------------------------------------------------------
+if [[ "${_sasl_deferred:-false}" == "true" ]]; then
+    echo ""
+    echo "[INFO] Registering SCRAM users on the new cluster..."
+    for _u in "${CONFLUENT_SASL_ADMIN_USER}" ${=${CONFLUENT_SASL_CLIENTS:-app-client}//,/ }; do
+        _up="$(oc get secret "${CONFLUENT_SASL_SECRET}" -n "${NS}" \
+            -o jsonpath="{.data.${_u}}" 2>/dev/null | base64 --decode 2>/dev/null || true)"
+        [[ -z "${_up}" ]] && continue
+        if oc exec broker-0 -n "${NS}" -- kafka-configs \
+            --bootstrap-server "localhost:${CONFLUENT_BROKER_INTERNAL_PORT}" \
+            --alter --add-config "${CONFLUENT_SASL_MECHANISM}=[password=${_up}]" \
+            --entity-type users --entity-name "${_u}" >/dev/null 2>&1; then
+            echo "[INFO]   registered ${_u}"
+        else
+            echo "[ERROR] Failed to register SCRAM user '${_u}'." >&2
+            echo "[ERROR] The platform is running but UNAUTHENTICATED. Re-run this script" >&2
+            echo "[ERROR] or x.2_confluent_add_sasl.sh once the cluster is healthy." >&2
+            exit 1
+        fi
+    done
+    echo "[INFO] Applying the SASL listeners (second pass)..."
+    exec "${SCRIPT_DIR}/$(basename $0)"
+fi
+
 echo "[INFO] Confluent Platform ${CONFLUENT_VERSION} installed in project '${NS}'."
 echo "[INFO] In-cluster bootstrap servers: ${BOOTSTRAP}"
 
-if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+if [[ "${CONFLUENT_AUTH_ENABLED}" == "true" && "${CONFLUENT_AUTH_MODE}" == "basic" ]]; then
     echo "[INFO] Web UIs require basic auth - user '${AUTH_USER}', password:"
     echo "[INFO]   oc get secret ${CONFLUENT_AUTH_SECRET} -n ${NS} -o jsonpath='{.data.password}' | base64 --decode"
+elif [[ "${CONFLUENT_AUTH_ENABLED}" == "true" ]]; then
+    echo "[INFO] The Control Center UI is behind the OpenShift login (oauth-proxy)."
 else
     echo "[WARN] Web UIs are exposed WITHOUT authentication (CONFLUENT_AUTH_ENABLED=false)."
 fi

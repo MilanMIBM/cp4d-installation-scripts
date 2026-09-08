@@ -43,13 +43,14 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 #   --password <pw>  set this exact password instead of generating one
 #   --username <u>   set the username (default: CONFLUENT_AUTH_USERNAME)
 #   --disable        remove authentication and redeploy the UIs open
-#   --yes            skip the confirmation prompt
+#   --yes            skip the --disable confirmation prompt
 #   --dry-run        report what would change, change nothing
 #   --no-status      skip the closing status report
 #
 # With no flags it enables auth using the existing stored password when there is
 # one, generating a password only if none exists. That makes a bare re-run
-# idempotent and safe.
+# idempotent and safe, so it runs straight through without asking; only
+# --disable stops to confirm.
 # ==============================================================================
 
 ROTATE=false
@@ -162,14 +163,21 @@ if $DRY_RUN; then
     exit 0
 fi
 
-if ! $ASSUME_YES; then
-    echo "The listed components will be redeployed (brief web UI downtime; Kafka is unaffected)."
+# Adding or rotating credentials only restarts the three web components - Kafka
+# and its data are untouched - so it runs without confirmation. Use --dry-run to
+# preview. Only --disable prompts, since that strips protection from endpoints
+# that are reachable from outside the cluster.
+if $DISABLE && ! $ASSUME_YES; then
+    echo "This REMOVES authentication: the web UIs will be publicly reachable."
     printf "Continue? [y/N] "
     read -r _reply
     case "${_reply}" in
         y|Y|yes|YES) ;;
         *) echo "[INFO] Aborted."; exit 0 ;;
     esac
+    echo ""
+else
+    echo "[INFO] Redeploying the listed components (brief web UI downtime; Kafka is unaffected)."
     echo ""
 fi
 
