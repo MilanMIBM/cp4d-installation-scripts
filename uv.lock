@@ -205,7 +205,11 @@ wheels = [
 
 [[package]]
 name = "anthropic"
+<<<<<<< Updated upstream
 version = "1.0.0"
+=======
+version = "0.115.1"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -216,9 +220,15 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/25/aa/4978e58035bd6c638c7b483450a68b7ef2d732ab78885e27bb9db0cff1a2/anthropic-1.0.0.tar.gz", hash = "sha256:42be3c97604af7252c5898413aee076ace6c46e9bca0d0d90ceb77c7d3719027", size = 1077769, upload-time = "2026-08-20T19:59:00.565Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ad/5b/db4a854aebf5d33a5ab714c46af6eb85ee44f390ed29b7b325c00b9f11ed/anthropic-1.0.0-py3-none-any.whl", hash = "sha256:32dd52e9e1d774393b27182f451398ba4262287a4d0eab30887f89f1481b3ae4", size = 1171725, upload-time = "2026-08-20T19:58:58.725Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/99/e2/e27b1e70b1ddcda72362d6a26c9c699a46173d48a6c7ba966e8cc97a6c4d/anthropic-0.115.1.tar.gz", hash = "sha256:040287319abb909acf1cc49d83c0405dc0b1121ef257034b02c2b54151cf2446", size = 949185, upload-time = "2026-07-01T21:54:19.05Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/3c/501c58a8f8c68811079e218a25d8672fe4fb9a650a4655e499e24d9375e9/anthropic-0.115.1-py3-none-any.whl", hash = "sha256:685fa94964c1b9428f6a76e42d0dbae49aa2016f5ad386a96becac04c5e80ef9", size = 957006, upload-time = "2026-07-01T21:54:17.392Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -982,15 +992,25 @@ wheels = [
 
 [[package]]
 name = "genai-prices"
+<<<<<<< Updated upstream
 version = "0.1.4"
+=======
+version = "0.0.69"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx2" },
     { name = "pydantic" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/1e/e3/23f4be7d5626878a6297c728f5f8db83bd9b135da481935d4c1bb82efc21/genai_prices-0.1.4.tar.gz", hash = "sha256:f3b8a0bf0c21b01f5af3ca42babcab2f17728bf3c602f87f42b72d1d2bf61d98", size = 94678, upload-time = "2026-08-19T23:53:25.527Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/54/911961e926a4c4ea30bf1fa0bf9d8ffc5c9ac5ed6a3f77b3d9e0ab5bb9a5/genai_prices-0.1.4-py3-none-any.whl", hash = "sha256:1d1b01cc7ab1adfa17c3a1121f4c13990bd0a4377640ecd37ebfde5836768240", size = 99160, upload-time = "2026-08-19T23:53:24.52Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/c4/17/b9a96d31908f1415b38e3bcba7883691fa2e0e69e18d0d9d6e80bf24be88/genai_prices-0.0.69.tar.gz", hash = "sha256:80ca72c4b59b62ef986be3f04ea528bf4aaac4bc91e1c34f32f354c0c0b23d16", size = 81492, upload-time = "2026-07-02T09:40:21.964Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/05/6bb176d603210b61d2bf4585c7119dcf5491bbcae195e21254668c5ee07a/genai_prices-0.0.69-py3-none-any.whl", hash = "sha256:281821349e301e938e00ba9a9e8df5be23336e2f04218a4979f6c5f89db083bb", size = 83972, upload-time = "2026-07-02T09:40:20.844Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -1742,7 +1762,11 @@ wheels = [
 
 [[package]]
 name = "marimo"
+<<<<<<< Updated upstream
 version = "0.24.0"
+=======
+version = "0.23.13"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click", marker = "sys_platform != 'emscripten'" },
@@ -1765,9 +1789,15 @@ dependencies = [
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
     { name = "websockets", marker = "sys_platform != 'emscripten'" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/36/e0/70c18b2862d9a439c811cf2e5bf0aef2b9d0cc7ac72beb2ba6eea9a9a055/marimo-0.24.0.tar.gz", hash = "sha256:30aaeae5a5936df524814fddd98f4b260d3068f97df2611d252fe4b253f3fb80", size = 39054161, upload-time = "2026-08-17T21:30:18.072Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/8b/3899b23020f5e43c7357171712b14b774434cb6b1a285f5678cc1234013a/marimo-0.24.0-py3-none-any.whl", hash = "sha256:a5470207ac4c228ee7c2c16f820b0ca1cdf58ec4b51074aca1a5c997422ae90a", size = 39517936, upload-time = "2026-08-17T21:30:13.832Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/33/8d/5527d7ddd38a3a495f38f86a41731437301f0d08d81353fb9ceedf167b3d/marimo-0.23.13.tar.gz", hash = "sha256:12dffd800b3f6beae15e0ee3983cc3e8a3fb03c8a87cb0d58973e560008ba3aa", size = 38641267, upload-time = "2026-07-01T17:36:40.151Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/c0/8470e4e383b01d88fa9c80fba2b0b203d6e4a41e4fbcaedcac997b664b42/marimo-0.23.13-py3-none-any.whl", hash = "sha256:bc6e0f2c59d2086b0707fac56edeedf5f6edf8a390b4d59f4c417ce4c683adb9", size = 39091347, upload-time = "2026-07-01T17:36:36.151Z" },
+>>>>>>> Stashed changes
 ]
 
 [package.optional-dependencies]
@@ -2078,11 +2108,19 @@ wheels = [
 
 [[package]]
 name = "narwhals"
+<<<<<<< Updated upstream
 version = "2.25.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6f/7b/6248dada39781db1ab3ebf08943080df0796098515a87f6f8696d14ec744/narwhals-2.25.0.tar.gz", hash = "sha256:62c036c810662bf7820b7737077176313bc59350eeeefb808510f388c743e4b2", size = 677076, upload-time = "2026-08-20T18:10:15.454Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/dc/55481808fd70ef1567cf13540ffd4702af3f74b112e35427564b03f79c2d/narwhals-2.25.0-py3-none-any.whl", hash = "sha256:1f0f403e8c7e4463cde9bfe78b12fdd809e3ae3dda6d9b2f802934fb9c7a6a8f", size = 467373, upload-time = "2026-08-20T18:10:13.834Z" },
+=======
+version = "2.23.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/ac/66ed1fc6e38a0c0f330627ec5c5d597990d6159b6712b82af0ad2c65f06c/narwhals-2.23.0.tar.gz", hash = "sha256:13e7ff5b4bb4a2f77b907c2e4d8a76e273dfc1323a3c997440a2f9fd26aed408", size = 656209, upload-time = "2026-07-01T11:21:53.278Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/4e/afc8c31605cb8be1d3bb4438c4d979daa104dab6306cd2b87abe9c3a7299/narwhals-2.23.0-py3-none-any.whl", hash = "sha256:769e7b9ab102c93d8fa019f6b4cd1a657909b04a20bf6210e5a35aae06814ae9", size = 458938, upload-time = "2026-07-01T11:21:51.677Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -2722,19 +2760,33 @@ email = [
 
 [[package]]
 name = "pydantic-ai"
+<<<<<<< Updated upstream
 version = "2.35.0"
+=======
+version = "2.3.0"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic-ai-slim", extra = ["anthropic", "cli", "evals", "google", "logfire", "mcp", "openai", "web"] },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/e6/ed/772bca243444c47137aedc62d453a3138618bdf9496d8f15e5e5ae1b4117/pydantic_ai-2.35.0.tar.gz", hash = "sha256:72a571a6dc4784da6002988cdf443d7b3a3eb6f95ab6aef7e9fea484e76b8cfe", size = 23462, upload-time = "2026-08-26T01:41:41.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/1f/253f51e8c1cb2c9f7588270f53745c698d2b208b16f037fb8d67786a1446/pydantic_ai-2.35.0-py3-none-any.whl", hash = "sha256:638c4678edbe85d351793ac512baa2f24f419c6c6427506511b528ff90f5f5ea", size = 9449, upload-time = "2026-08-26T01:41:32.531Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/6a/7d/dd1d1e3e65c733b1e72de9600cb73b19d99cafdde023f682977cdb114957/pydantic_ai-2.3.0.tar.gz", hash = "sha256:928f68c32431287ea3aa4deff07ad3b763aa524e540be2ab5e471a5773aee39f", size = 18283, upload-time = "2026-07-02T02:19:50.67Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/1a/2eac666356e6e25f2cf11ecd10619b68faf73642a6f59ea92282014b3644/pydantic_ai-2.3.0-py3-none-any.whl", hash = "sha256:c6b6ebb2d7681c14d65d3e01a5b008b98016701d1860897114a2d2391a2b8d26", size = 7702, upload-time = "2026-07-02T02:19:42.602Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
+<<<<<<< Updated upstream
 version = "2.35.0"
+=======
+version = "2.3.0"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2746,9 +2798,15 @@ dependencies = [
     { name = "pydantic-graph" },
     { name = "typing-inspection" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/20/fa/29705d123404dbb354a36d558fd04af49b96999ff876080befba8357b884/pydantic_ai_slim-2.35.0.tar.gz", hash = "sha256:a19cec47fdba200944e207d2862afe87b8918eb6661f46ae124dfc836aab390b", size = 1262636, upload-time = "2026-08-26T01:41:43.869Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/6c/c232c99e306529454f23704385dbd6e204a2fef24f6128cff97859a20ea3/pydantic_ai_slim-2.35.0-py3-none-any.whl", hash = "sha256:bfb542fd5d6e4cb1ccabb6b64ef110a41591ff6886395a45390d262c18a2d6df", size = 1489896, upload-time = "2026-08-26T01:41:35.905Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/46/6a/99d5a1ad13ca29221ff7a5888b1f7d7998095625c75fc95d8ec05a808d55/pydantic_ai_slim-2.3.0.tar.gz", hash = "sha256:65f60f7f50ca06c623eb229f76d4cdc312fd0df7b826d1b7da392a6ff9508b1d", size = 753660, upload-time = "2026-07-02T02:19:52.656Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/56/052e8dad198a82cf41558447cc5d7cfc1052843f162d53abf5249ebf71b9/pydantic_ai_slim-2.3.0-py3-none-any.whl", hash = "sha256:40d19d07225cc7b70a7e1028f79ab974a15d9b8e16a7ed0dd76190ceb8cc569b", size = 928193, upload-time = "2026-07-02T02:19:45.338Z" },
+>>>>>>> Stashed changes
 ]
 
 [package.optional-dependencies]
@@ -2861,7 +2919,11 @@ wheels = [
 
 [[package]]
 name = "pydantic-evals"
+<<<<<<< Updated upstream
 version = "2.35.0"
+=======
+version = "2.3.0"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2871,14 +2933,24 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/9c/10/68174f5022d798963ceda349dc4c8dd145cc8bef604dc6dea6b27fc1e24d/pydantic_evals-2.35.0.tar.gz", hash = "sha256:c0f0a6d7bc24ba795072b08bba09e512b5521f21385b848c42e7963eddd8d587", size = 86809, upload-time = "2026-08-26T01:41:45.308Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/11/49/2f6785afc8b0b07b909334d73e65a9cc91d6ac19b6d2ac8e21bb5c3addb3/pydantic_evals-2.35.0-py3-none-any.whl", hash = "sha256:aeebb624e757a50a48a4e78d81761cd2209f27d297ca5ccbc8bf53344f3ea746", size = 102013, upload-time = "2026-08-26T01:41:37.741Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/45/4a/7c8aae25f4a8e85bdc34d5503f4d8abe2b7653b1894cc4209dcf2dddc9fd/pydantic_evals-2.3.0.tar.gz", hash = "sha256:246873daff21773c257c5ed0bd3cc54601d1fcb3362bbd2f6fbcb2f62ce618d9", size = 76088, upload-time = "2026-07-02T02:19:53.864Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/9a/607d9601ac6a6c7c0f956cd259d7e141ba1f19a33e3b7297b1bc0c21620d/pydantic_evals-2.3.0-py3-none-any.whl", hash = "sha256:5ef815f2a6656561bb25a766bc51f1f49b30c900e30df421c3305e6598de7f3c", size = 90664, upload-time = "2026-07-02T02:19:47.154Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
 name = "pydantic-graph"
+<<<<<<< Updated upstream
 version = "2.35.0"
+=======
+version = "2.3.0"
+>>>>>>> Stashed changes
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2886,9 +2958,15 @@ dependencies = [
     { name = "pydantic" },
     { name = "typing-inspection" },
 ]
+<<<<<<< Updated upstream
 sdist = { url = "https://files.pythonhosted.org/packages/e5/7b/848bb2843f74296d389cfc936a63986640f43286b73c63ddaeb3e9fe8dde/pydantic_graph-2.35.0.tar.gz", hash = "sha256:abb85087d2b9992f24b58ad94fc3580c7e921ee55740acedf410d858f880fc8c", size = 45162, upload-time = "2026-08-26T01:41:46.323Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/f1/fb23f32ad9072bced0b7854218f3e7c13de7c1aa1ab12af540790ba9b0b3/pydantic_graph-2.35.0-py3-none-any.whl", hash = "sha256:6cddd23b3481d532c3c91e1c149c6c65ab277ab03c72857e83f385dc5d11a40a", size = 52648, upload-time = "2026-08-26T01:41:39.226Z" },
+=======
+sdist = { url = "https://files.pythonhosted.org/packages/6f/8a/5d61064475d28cf6145ea1a26a08b58cfb80dc18cba4ea94924590829951/pydantic_graph-2.3.0.tar.gz", hash = "sha256:88a9f614c035354b6361d428c4f8bc21b93960b5abbf4c0d891a64511fc0062f", size = 43500, upload-time = "2026-07-02T02:19:54.827Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/d0/dcde7a9a9b4bc52233394ff2b6e65e92d2d3f9a632049c24f162440b6fe4/pydantic_graph-2.3.0-py3-none-any.whl", hash = "sha256:ae69aef9a62a0115c6528380e3996ab3e0d60c929a32ee3af883304dfc36b544", size = 51190, upload-time = "2026-07-02T02:19:48.492Z" },
+>>>>>>> Stashed changes
 ]
 
 [[package]]
