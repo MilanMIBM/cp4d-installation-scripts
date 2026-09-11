@@ -38,9 +38,14 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 # offsets live in Kafka topics, so they resume where they left off.
 #
 # Usage:
-#   ./x.3_confluent_add_connector.sh <source> [options]
+#   ./x.3_confluent_add_connector.sh <source> [<source>...] [options]
+#   ./x.3_confluent_add_connector.sh --file connectors.txt [options]
 #   ./x.3_confluent_add_connector.sh --list
 #   ./x.3_confluent_add_connector.sh --remove <name>
+#
+# Several sources install in one run and share a SINGLE rollout: each is staged
+# in turn, then Connect restarts once at the end. Sources are classified up
+# front, so a typo in the last one is reported before anything is downloaded.
 #
 #   <source> is one of:
 #     https://www.confluent.io/hub/owner/name   a Confluent Hub page URL; the
@@ -51,17 +56,39 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 #     ./path/to/plugin-dir/       a local directory of JARs
 #     owner/name:version          a Confluent Hub coordinate (needs egress)
 #
-#   --name <n>    directory name for the plugin (default: derived from source)
+#   --file <p>    install every connector listed in a manifest file, the
+#     (-f)        requirements.txt equivalent. One source per line, with
+#                 optional per-line --name and --force after it:
+#
+#                   # comments and blank lines are ignored
+#                   confluentinc/kafka-connect-jdbc:latest
+#                   confluentinc/kafka-connect-http:latest  --name http-sink
+#                   ./local/connector.zip                   --force
+#
+#                 A YAML list works too, so a .yaml manifest reads naturally:
+#
+#                   connectors:
+#                     - confluentinc/kafka-connect-jdbc:latest
+#                     - confluentinc/kafka-connect-http:latest --name http-sink
+#
+#                 Sources on the command line are installed as well as the
+#                 file's. Run-wide flags (--keep-going, --no-restart, --dry-run)
+#                 belong on the command line, not in the manifest.
+#   --name <n>    directory name for the plugin (default: derived from source).
+#                 Single source only - with several, use a per-line --name.
 #   --list        list installed plugins and the worker's loaded connectors
 #   --remove <n>  delete a plugin directory and restart
-#   --no-restart  stage the files but skip the rollout (plugin stays invisible
+#   --no-restart  stage the files but skip the rollout (plugins stay invisible
 #                 until the next restart)
+#   --keep-going  with several sources, install the ones that work and report
+#                 the failures, instead of stopping at the first (the default is
+#                 to stop WITHOUT restarting, so nothing goes live half-done)
 #   --force       overwrite an existing plugin directory of the same name
 #   --yes         skip the confirmation prompt
 #   --dry-run     report what would change, change nothing
 # ==============================================================================
 
-SOURCE=""
+SOURCES=()
 PLUGIN_NAME=""
 DO_LIST=false
 REMOVE_NAME=""
@@ -69,33 +96,144 @@ NO_RESTART=false
 FORCE=false
 ASSUME_YES=true
 DRY_RUN=false
+KEEP_GOING=false
+
+MANIFEST=""
 
 _need_value() { [[ -n "${2:-}" && "${2}" != --* ]] || { echo "[ERROR] $1 requires a value." >&2; exit 1; }; }
 
 while (( $# > 0 )); do
     case "$1" in
+        --file|-f)    _need_value "$1" "${2:-}"; MANIFEST="$2"; shift 2 ;;
         --name)       _need_value "$1" "${2:-}"; PLUGIN_NAME="$2"; shift 2 ;;
         --list)       DO_LIST=true; shift ;;
         --remove)     _need_value "$1" "${2:-}"; REMOVE_NAME="$2"; shift 2 ;;
         --no-restart) NO_RESTART=true; shift ;;
+        --keep-going) KEEP_GOING=true; shift ;;
         --force)      FORCE=true; shift ;;
         --yes|-y)     ASSUME_YES=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
-        -h|--help)    sed -n '16,61p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)    sed -n '16,88p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --*) echo "[ERROR] Unknown argument '$1'. Try --help." >&2; exit 1 ;;
-        *)
-            [[ -z "${SOURCE}" ]] || { echo "[ERROR] More than one source given ('${SOURCE}', '$1')." >&2; exit 1; }
-            SOURCE="$1"; shift ;;
+        *)  SOURCES+=("$1"); shift ;;
     esac
 done
 
-if $DO_LIST && { [[ -n "${SOURCE}" ]] || [[ -n "${REMOVE_NAME}" ]]; }; then
+# ------------------------------------------------------------------------------
+# --file: a requirements.txt-style manifest
+# ------------------------------------------------------------------------------
+# One source per line, with optional per-line flags after it:
+#
+#   # comments and blank lines are ignored
+#   confluentinc/kafka-connect-jdbc:latest
+#   confluentinc/kafka-connect-http:latest   --name http-sink
+#   ./local/connector.zip                    --force
+#
+# Also accepts a YAML list, so a .yaml manifest reads naturally:
+#
+#   connectors:
+#     - confluentinc/kafka-connect-jdbc:latest
+#     - confluentinc/kafka-connect-http:latest --name http-sink
+#
+# Only per-source flags are honoured per line (--name, --force). Run-wide flags
+# (--keep-going, --no-restart, --dry-run, --yes) stay on the command line, since
+# they describe the run and not any one plugin.
+#
+# NOTE the line is split on whitespace, so a path containing spaces must be
+# quoted the way a shell would expect.
+MANIFEST_NAMES=()   # parallel to SOURCES: per-source --name, "" when unset
+MANIFEST_FORCE=()   # parallel to SOURCES: "1" when that line passed --force
+
+# Command-line sources have no per-line overrides.
+for _ in "${SOURCES[@]}"; do MANIFEST_NAMES+=(""); MANIFEST_FORCE+=(""); done
+
+if [[ -n "${MANIFEST}" ]] && { $DO_LIST || [[ -n "${REMOVE_NAME}" ]]; }; then
+    echo "[ERROR] --file cannot be combined with --list or --remove." >&2; exit 1
+fi
+
+if [[ -n "${MANIFEST}" ]]; then
+    [[ -f "${MANIFEST}" ]] || { echo "[ERROR] Manifest '${MANIFEST}' not found." >&2; exit 1; }
+
+    _lineno=0
+    while IFS= read -r _line || [[ -n "${_line}" ]]; do
+        _lineno=$(( _lineno + 1 ))
+        # Strip comments (# to end of line), CRs from Windows editors, and the
+        # YAML list marker so a .yaml and a .txt manifest parse the same way.
+        _line="${_line%%#*}"
+        _line="${_line//$'\r'/}"
+        # Trim with (z) word-splitting rather than an extendedglob pattern: the
+        # ##[[:space:]]## form needs setopt extendedglob, which this script does
+        # not set, so it silently trimmed nothing and a YAML '- item' arrived
+        # with the dash still attached.
+        _line="$(printf '%s' "${_line}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        [[ -z "${_line}" ]] && continue
+        # A bare 'connectors:' style key is a YAML container, not an entry.
+        [[ "${_line}" == *: && "${_line}" != *[[:blank:]]* ]] && continue
+        # YAML list item: '- source ...'
+        if [[ "${_line}" == "-"[[:blank:]]* ]]; then
+            _line="${_line#-}"
+            _line="$(printf '%s' "${_line}" | sed 's/^[[:space:]]*//')"
+        fi
+        [[ -z "${_line}" ]] && continue
+
+        # Split the line the way a shell would, so quoted paths survive.
+        _parts=("${(z)_line}")
+        _src="${_parts[1]}"
+        # Strip surrounding quotes left by (z) splitting.
+        _src="${_src#[\"\']}"; _src="${_src%[\"\']}"
+        [[ -n "${_src}" ]] || continue
+
+        _lname=""; _lforce=""
+        _j=2
+        while (( _j <= ${#_parts[@]} )); do
+            case "${_parts[$_j]}" in
+                --name)
+                    _j=$(( _j + 1 ))
+                    (( _j <= ${#_parts[@]} )) || {
+                        echo "[ERROR] ${MANIFEST}:${_lineno}: --name needs a value." >&2; exit 1; }
+                    _lname="${_parts[$_j]}"
+                    _lname="${_lname#[\"\']}"; _lname="${_lname%[\"\']}" ;;
+                --force) _lforce="1" ;;
+                # Run-wide flags in a manifest would silently apply to the whole
+                # run from one line, which is not what the line seems to say.
+                --keep-going|--no-restart|--dry-run|--yes|-y|--list|--remove|--file|-f)
+                    echo "[ERROR] ${MANIFEST}:${_lineno}: '${_parts[$_j]}' is a run-wide flag;" >&2
+                    echo "[ERROR] pass it on the command line instead of in the manifest." >&2
+                    exit 1 ;;
+                *)
+                    echo "[ERROR] ${MANIFEST}:${_lineno}: unexpected '${_parts[$_j]}'." >&2
+                    echo "[ERROR] A line is: <source> [--name <n>] [--force]" >&2
+                    exit 1 ;;
+            esac
+            _j=$(( _j + 1 ))
+        done
+
+        SOURCES+=("${_src}")
+        MANIFEST_NAMES+=("${_lname}")
+        MANIFEST_FORCE+=("${_lforce}")
+    done < "${MANIFEST}"
+
+    (( ${#SOURCES[@]} > 0 )) || {
+        echo "[ERROR] Manifest '${MANIFEST}' lists no connectors." >&2; exit 1; }
+    echo "[INFO] Read ${#SOURCES[@]} connector(s) from ${MANIFEST}."
+fi
+
+# --name renames the plugin directory, so it is meaningless for more than one
+# source: every plugin would be given the same directory and overwrite the last.
+# Per-line --name inside a manifest is fine, because it names only that line.
+if [[ -n "${PLUGIN_NAME}" ]] && (( ${#SOURCES[@]} > 1 )); then
+    echo "[ERROR] --name takes a single source (got ${#SOURCES[@]}). Use a per-line --name" >&2
+    echo "[ERROR] in a --file manifest, or install them one at a time." >&2
+    exit 1
+fi
+
+if $DO_LIST && { (( ${#SOURCES[@]} > 0 )) || [[ -n "${REMOVE_NAME}" ]]; }; then
     echo "[ERROR] --list takes no source and cannot be combined with --remove." >&2; exit 1
 fi
-if [[ -n "${REMOVE_NAME}" && -n "${SOURCE}" ]]; then
+if [[ -n "${REMOVE_NAME}" ]] && (( ${#SOURCES[@]} > 0 )); then
     echo "[ERROR] --remove cannot be combined with a source." >&2; exit 1
 fi
-if ! $DO_LIST && [[ -z "${REMOVE_NAME}" && -z "${SOURCE}" ]]; then
+if ! $DO_LIST && [[ -z "${REMOVE_NAME}" ]] && (( ${#SOURCES[@]} == 0 )); then
     echo "[ERROR] No source given. Try --help." >&2; exit 1
 fi
 
@@ -225,7 +363,16 @@ fi
 # ------------------------------------------------------------------------------
 # Classify the source
 # ------------------------------------------------------------------------------
+# Run once per source. Sets SOURCE, SRC_KIND, HUB_VERSION and PLUGIN_NAME for the
+# source it is given; every later step reads those. Returns non-zero instead of
+# exiting so --keep-going can skip one bad source and carry on.
+_classify_source() {
+SOURCE="$1"
 SRC_KIND=""
+# Start from the caller's --name (single source only) so each source derives its
+# own directory; without this the first source's name would stick to the rest.
+PLUGIN_NAME="${PLUGIN_NAME_OPT}"
+HUB_VERSION=""
 case "${SOURCE}" in
     # A Hub page URL (confluent.io/hub/owner/name) is what a browser lands on;
     # it serves JS-rendered HTML, not the plugin. Resolve it to the real archive
@@ -239,12 +386,21 @@ case "${SOURCE}" in
             case "${SOURCE}" in
                 *.zip) SRC_KIND="zip" ;;
                 *.jar) SRC_KIND="jar" ;;
-                *) echo "[ERROR] '${SOURCE}' is neither .zip nor .jar." >&2; exit 1 ;;
+                *) echo "[ERROR] '${SOURCE}' is neither .zip nor .jar." >&2; return 1 ;;
             esac
+        elif [[ "${SOURCE}" == ./* || "${SOURCE}" == /* || "${SOURCE}" == ../* \
+                || "${SOURCE}" == *.zip || "${SOURCE}" == *.jar ]]; then
+            # Looks like a path, but nothing is there. Without this it would
+            # fall through to the Hub branch below (any string with a '/' is a
+            # valid-looking coordinate) and a typo'd path would be reported as a
+            # Hub download failure, or silently staged under a name like
+            # '.-nope.zip'.
+            echo "[ERROR] '${SOURCE}' looks like a path but does not exist." >&2
+            return 1
         elif [[ "${SOURCE}" == */* ]]; then   SRC_KIND="hub"
         else
             echo "[ERROR] '${SOURCE}' is not a URL, an existing path, or an owner/name[:version] Hub coordinate." >&2
-            exit 1
+            return 1
         fi ;;
 esac
 
@@ -258,7 +414,7 @@ HUB_VERSION=""
 if [[ "${SRC_KIND}" == "hubpage" ]]; then
     _coord="${SOURCE#*://}"; _coord="${_coord#*/hub/}"; _coord="${_coord%%\?*}"; _coord="${_coord%/}"
     if [[ "${_coord}" != */* ]]; then
-        echo "[ERROR] Cannot read an owner/name out of '${SOURCE}'." >&2; exit 1
+        echo "[ERROR] Cannot read an owner/name out of '${SOURCE}'." >&2; return 1
     fi
     _owner="${_coord%%/*}"; _plug="${_coord#*/}"
     # A page URL may carry a trailing version segment; the API wants two parts.
@@ -266,7 +422,7 @@ if [[ "${SRC_KIND}" == "hubpage" ]]; then
 
     echo "[INFO] Resolving Hub page for ${_owner}/${_plug}..."
     _meta="$(curl -sfL --retry 2 "https://api.hub.confluent.io/api/plugins/${_owner}/${_plug}" 2>/dev/null || true)"
-    [[ -n "${_meta}" ]] || { echo "[ERROR] Confluent Hub API returned nothing for ${_owner}/${_plug}." >&2; exit 1; }
+    [[ -n "${_meta}" ]] || { echo "[ERROR] Confluent Hub API returned nothing for ${_owner}/${_plug}." >&2; return 1; }
 
     _resolved="$(printf '%s' "${_meta}" | python3 -c 'import sys,json
 try: d=json.load(sys.stdin)
@@ -275,7 +431,7 @@ a=d.get("archive") or {}
 u=a.get("url")
 if not u: raise SystemExit(1)
 print(u); print(d.get("version") or ""); print(d.get("name") or "")' 2>/dev/null || true)"
-    [[ -n "${_resolved}" ]] || { echo "[ERROR] No archive URL in the Hub manifest for ${_owner}/${_plug}." >&2; exit 1; }
+    [[ -n "${_resolved}" ]] || { echo "[ERROR] No archive URL in the Hub manifest for ${_owner}/${_plug}." >&2; return 1; }
 
     SOURCE="$(printf '%s' "${_resolved}" | sed -n 1p)"
     HUB_VERSION="$(printf '%s' "${_resolved}" | sed -n 2p)"
@@ -295,23 +451,65 @@ if [[ -z "${PLUGIN_NAME}" ]]; then
     esac
 fi
 case "${PLUGIN_NAME}" in
-    */*|..|.|"") echo "[ERROR] Bad plugin name '${PLUGIN_NAME}'; pass --name." >&2; exit 1 ;;
+    */*|..|.|"") echo "[ERROR] Bad plugin name '${PLUGIN_NAME}'; pass --name." >&2; return 1 ;;
 esac
+return 0
+}
+
+# The command-line --name, captured BEFORE the loop. _classify_source assigns to
+# the global PLUGIN_NAME, so reading PLUGIN_NAME inside the loop would pick up
+# the previous source's derived name and hand it to every later source - which
+# then all resolve to the same directory and trip the duplicate check.
+CLI_PLUGIN_NAME="${PLUGIN_NAME}"
+
+# Classify every source up front, so a typo in the last one is reported before
+# the PVC is created or anything is downloaded.
+SRC_KINDS=(); PLUGIN_NAMES=(); RESOLVED_SOURCES=(); HUB_VERSIONS=(); FORCE_FLAGS=()
+_bad_sources=0
+for _n in {1..${#SOURCES[@]}}; do
+    _s="${SOURCES[$_n]}"
+    # A per-line --name from the manifest overrides the derived name for this
+    # source only; PLUGIN_NAME_OPT is the command-line --name (single source).
+    PLUGIN_NAME_OPT="${MANIFEST_NAMES[$_n]:-}"
+    [[ -z "${PLUGIN_NAME_OPT}" ]] && PLUGIN_NAME_OPT="${CLI_PLUGIN_NAME}"
+    if _classify_source "${_s}"; then
+        RESOLVED_SOURCES+=("${SOURCE}"); SRC_KINDS+=("${SRC_KIND}")
+        PLUGIN_NAMES+=("${PLUGIN_NAME}"); HUB_VERSIONS+=("${HUB_VERSION}")
+        FORCE_FLAGS+=("${MANIFEST_FORCE[$_n]:-}")
+    else
+        _bad_sources=$(( _bad_sources + 1 ))
+        $KEEP_GOING || exit 1
+        echo "[WARN] --keep-going: skipping '${_s}'."
+    fi
+done
+(( ${#RESOLVED_SOURCES[@]} > 0 )) || { echo "[ERROR] No usable source." >&2; exit 1; }
+
+# Two sources resolving to the same directory would silently overwrite.
+_dupes="$(printf '%s\n' "${PLUGIN_NAMES[@]}" | sort | uniq -d)"
+if [[ -n "${_dupes}" ]]; then
+    echo "[ERROR] More than one source resolves to the same plugin name:" >&2
+    printf '[ERROR]   %s\n' ${=_dupes} >&2
+    echo "[ERROR] Install them separately with --name to tell them apart." >&2
+    exit 1
+fi
 
 echo "=============================================================================="
 echo " Install Connect plugin - project '${NS}'"
 echo "=============================================================================="
-echo "  source  : ${SOURCE}"
-echo "  kind    : ${SRC_KIND}"
-[[ -n "${HUB_VERSION}" ]] && echo "  version : ${HUB_VERSION} (from Confluent Hub)"
-echo "  name    : ${PLUGIN_NAME}"
-echo "  target  : ${PLUGIN_DIR}/${PLUGIN_NAME}"
+echo "  plugins : ${#RESOLVED_SOURCES[@]}"
+for _i in {1..${#RESOLVED_SOURCES[@]}}; do
+    echo "    ${_i}. ${PLUGIN_NAMES[$_i]}  (${SRC_KINDS[$_i]})"
+    echo "       from ${RESOLVED_SOURCES[$_i]}"
+    [[ -n "${HUB_VERSIONS[$_i]}" ]] && echo "       version ${HUB_VERSIONS[$_i]} (from Confluent Hub)"
+    echo "       -> ${PLUGIN_DIR}/${PLUGIN_NAMES[$_i]}"
+done
 echo "  storage : $(_has_plugin_volume && echo "existing PVC ${CONFLUENT_CONNECT_PLUGIN_PVC}" || echo "new PVC ${CONFLUENT_CONNECT_PLUGIN_PVC} (${CONFLUENT_CONNECT_PLUGIN_SIZE})")"
 if $NO_RESTART; then
     echo "  restart : skipped (--no-restart; plugin stays invisible until next restart)"
 else
-    echo "  restart : yes - Connect rolls, running connectors pause and resume"
+    echo "  restart : yes - ONE rollout after all plugins are staged"
 fi
+$KEEP_GOING && echo "  on error: --keep-going, install what works and report the rest"
 echo ""
 
 if $DRY_RUN; then echo "[INFO] --dry-run: no changes made."; exit 0; fi
@@ -405,12 +603,25 @@ POD="$(_wait_pod)"
 echo "[INFO] Using pod ${POD}."
 
 # ------------------------------------------------------------------------------
+# Steps 2 and 3, once per source
+# ------------------------------------------------------------------------------
+# Everything from the clobber check to the move into place is per-plugin. The
+# PVC above and the rollout below are shared, which is the whole point: N
+# plugins, ONE restart. Returns non-zero rather than exiting so --keep-going can
+# carry on to the next source.
+_install_one() {
+local SOURCE="$1" SRC_KIND="$2" PLUGIN_NAME="$3" LINE_FORCE="${4:-}"
+# --force is either run-wide (command line) or set on this manifest line.
+local _force=false
+{ $FORCE || [[ -n "${LINE_FORCE}" ]]; } && _force=true
+
+# ------------------------------------------------------------------------------
 # Step 2 - refuse to clobber unless --force
 # ------------------------------------------------------------------------------
 if oc exec "${POD}" -n "${NS}" -- sh -c "[ -e '${PLUGIN_DIR}/${PLUGIN_NAME}' ]" 2>/dev/null; then
-    if ! $FORCE; then
+    if ! $_force; then
         echo "[ERROR] '${PLUGIN_NAME}' is already installed. Re-run with --force to overwrite, or --name to install alongside." >&2
-        exit 1
+        return 1
     fi
     echo "[INFO] --force: replacing existing '${PLUGIN_NAME}'."
     oc exec "${POD}" -n "${NS}" -- rm -rf "${PLUGIN_DIR}/${PLUGIN_NAME}"
@@ -433,15 +644,15 @@ case "${SRC_KIND}" in
         # -f so an HTML error page is not silently unzipped as a plugin.
         oc exec "${POD}" -n "${NS}" -- sh -c \
             "curl -fSL --retry 3 -o '${STAGE}/plugin.zip' '${SOURCE}'" || {
-            _cleanup_stage; echo "[ERROR] Download failed." >&2; exit 1; }
+            _cleanup_stage; echo "[ERROR] Download failed." >&2; return 1; }
         _unzip_in_pod "${POD}" "${STAGE}" "${STAGE}/plugin.zip" || {
-            _cleanup_stage; echo "[ERROR] Not a valid ZIP archive." >&2; exit 1; }
+            _cleanup_stage; echo "[ERROR] Not a valid ZIP archive." >&2; return 1; }
         ;;
     zip)
         echo "[INFO] Uploading $(basename "${SOURCE}")"
         oc exec -i "${POD}" -n "${NS}" -- sh -c "cat > '${STAGE}/plugin.zip'" < "${SOURCE}"
         _unzip_in_pod "${POD}" "${STAGE}" "${STAGE}/plugin.zip" || {
-            _cleanup_stage; echo "[ERROR] Not a valid ZIP archive." >&2; exit 1; }
+            _cleanup_stage; echo "[ERROR] Not a valid ZIP archive." >&2; return 1; }
         ;;
     jar)
         echo "[INFO] Uploading $(basename "${SOURCE}")"
@@ -450,7 +661,7 @@ case "${SRC_KIND}" in
     dir)
         echo "[INFO] Copying directory ${SOURCE}"
         oc cp "${SOURCE%/}/." "${NS}/${POD}:${STAGE}" || {
-            _cleanup_stage; echo "[ERROR] Copy failed." >&2; exit 1; }
+            _cleanup_stage; echo "[ERROR] Copy failed." >&2; return 1; }
         ;;
     hub)
         echo "[INFO] confluent-hub install ${SOURCE} (needs egress to Confluent Hub)"
@@ -459,7 +670,7 @@ case "${SRC_KIND}" in
             _cleanup_stage
             echo "[ERROR] confluent-hub install failed - usually no egress to Confluent Hub." >&2
             echo "[INFO]  Download the ZIP on a connected host and pass it as a path instead." >&2
-            exit 1; }
+            return 1; }
         ;;
 esac
 
@@ -477,15 +688,63 @@ oc exec "${POD}" -n "${NS}" -- sh -c "
 "
 
 # Sanity check: a plugin with no JAR anywhere is a bad download or wrong archive.
-if ! oc exec "${POD}" -n "${NS}" -- sh -c "find '${STAGE}' -name '*.jar' -print -quit | grep -q ." 2>/dev/null; then
+#
+# Deliberately NOT 'find': the CP 8.x Connect images do not ship findutils, so
+# the check failed with "find: command not found", which the 2>/dev/null hid and
+# then reported as a bad download on a plugin that had downloaded perfectly.
+# Globbing is a shell builtin and always present. Depth 3 covers every layout
+# confluent-hub produces: uber JAR at the root, the usual lib/ subdirectory, and
+# one extra level for archives that nest deeper.
+if ! oc exec "${POD}" -n "${NS}" -- sh -c "
+    set -- '${STAGE}'/*.jar '${STAGE}'/*/*.jar '${STAGE}'/*/*/*.jar
+    for f; do [ -f \"\$f\" ] && exit 0; done
+    exit 1
+" 2>/dev/null; then
     _cleanup_stage
     echo "[ERROR] No .jar found in the staged plugin - wrong archive or a bad download." >&2
-    exit 1
+    return 1
 fi
 
 oc exec "${POD}" -n "${NS}" -- mv "${STAGE}" "${PLUGIN_DIR}/${PLUGIN_NAME}"
 echo "[INFO] Staged at ${PLUGIN_DIR}/${PLUGIN_NAME}:"
 oc exec "${POD}" -n "${NS}" -- sh -c "ls -1 '${PLUGIN_DIR}/${PLUGIN_NAME}' | head -10"
+return 0
+}
+
+# Stage every plugin before restarting anything.
+INSTALLED=(); FAILED=()
+for _i in {1..${#RESOLVED_SOURCES[@]}}; do
+    echo ""
+    echo "------------------------------------------------------------------------------"
+    echo " [${_i}/${#RESOLVED_SOURCES[@]}] ${PLUGIN_NAMES[$_i]}"
+    echo "------------------------------------------------------------------------------"
+    if _install_one "${RESOLVED_SOURCES[$_i]}" "${SRC_KINDS[$_i]}" "${PLUGIN_NAMES[$_i]}" "${FORCE_FLAGS[$_i]:-}"; then
+        INSTALLED+=("${PLUGIN_NAMES[$_i]}")
+    else
+        FAILED+=("${PLUGIN_NAMES[$_i]}")
+        if ! $KEEP_GOING; then
+            echo "" >&2
+            echo "[ERROR] '${PLUGIN_NAMES[$_i]}' failed. Stopping without restarting Connect." >&2
+            if (( ${#INSTALLED[@]} > 0 )); then
+                echo "[INFO] Already staged (on disk, NOT yet loaded): ${INSTALLED[*]}" >&2
+                echo "[INFO] They load on the next restart, or re-run with --keep-going." >&2
+            fi
+            exit 1
+        fi
+        echo "[WARN] --keep-going: continuing after '${PLUGIN_NAMES[$_i]}'."
+    fi
+done
+
+echo ""
+echo "------------------------------------------------------------------------------"
+echo " Staged ${#INSTALLED[@]}/${#RESOLVED_SOURCES[@]}: ${INSTALLED[*]:-none}"
+(( ${#FAILED[@]} > 0 )) && echo " Failed  ${#FAILED[@]}: ${FAILED[*]}"
+echo "------------------------------------------------------------------------------"
+
+if (( ${#INSTALLED[@]} == 0 )); then
+    echo "[ERROR] Nothing was staged; not restarting Connect." >&2
+    exit 1
+fi
 
 # ------------------------------------------------------------------------------
 # Step 4 - restart so the worker scans the plugin path

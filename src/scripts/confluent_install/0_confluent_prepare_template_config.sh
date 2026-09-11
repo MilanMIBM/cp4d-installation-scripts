@@ -236,6 +236,56 @@ _platform_defaults=(
     'CONFLUENT_SASL_ADMIN_USER|confluent-admin|'
     'CONFLUENT_SASL_CLIENTS|app-client|# Comma-separated. One SCRAM credential is minted per name.'
     'CONFLUENT_SASL_SECRET|confluent-sasl|'
+    'CONFLUENT_MDS_ENABLED|false|# ---- Metadata Service (MDS) / RBAC -------------------------------------------
+# MDS is embedded in the cp-server broker image, so enabling it adds no new
+# Confluent component - it opens an HTTP listener on the brokers and turns on
+# the RBAC authorizer. This is what makes \"confluent login --url\" work.
+#
+# COMMERCIAL FEATURE: MDS/RBAC is licensed. With no license key the brokers run
+# it on the built-in 30-day trial and then stop honouring it. Set
+# CONFLUENT_LICENSE_KEY before relying on this beyond evaluation.
+#
+# Requires CONFLUENT_SASL_ENABLED=true: MDS issues tokens for principals that
+# must already be able to authenticate to Kafka.
+# Provisioned by x.4_confluent_add_mds.sh, removed by x.4_confluent_remove_mds.sh.'
+    'CONFLUENT_MDS_PORT|8090|'
+    'CONFLUENT_MDS_USER_STORE|LDAP|# LDAP   = bundled OpenLDAP (default; Confluent'"'"'s best-supported MDS store).
+# OAUTH  = bundled Keycloak, or an external OIDC provider when
+#          CONFLUENT_MDS_OAUTH_JWKS_URL is set. Enables SSO/device-code login.'
+    'CONFLUENT_MDS_SECRET|confluent-mds|# Holds the MDS token-signing keypair and the super-user password.'
+    'CONFLUENT_MDS_SUPER_USER|mds-admin|# Bootstrap super user: holds SystemAdmin on the Kafka cluster and is the
+# account you use for the first \"confluent login\".'
+    'CONFLUENT_MDS_USERS|kafka-admin,kafka-user|# Comma-separated. Created in the user store with a generated password each.'
+    'CONFLUENT_LICENSE_KEY||# Confluent commercial license. Empty = 30-day trial for MDS/RBAC and C3.'
+    'CONFLUENT_LDAP_IMAGE|docker.io/bitnamilegacy/openldap:2.6.10|# ---- Bundled OpenLDAP (CONFLUENT_MDS_USER_STORE=LDAP) ------------------------'
+    'CONFLUENT_LDAP_PORT|1389|'
+    'CONFLUENT_LDAP_DOMAIN|confluent.io|# Base DN is derived from this: confluent.io -> dc=confluent,dc=io'
+    'CONFLUENT_LDAP_ADMIN_USER|admin|'
+    'CONFLUENT_LDAP_SECRET|confluent-ldap|'
+    'CONFLUENT_KEYCLOAK_IMAGE|quay.io/keycloak/keycloak:26.0|# ---- Bundled Keycloak (CONFLUENT_MDS_USER_STORE=OAUTH) -----------------------
+# Ignored when CONFLUENT_MDS_OAUTH_JWKS_URL points at an external provider.'
+    'CONFLUENT_KEYCLOAK_PORT|8080|'
+    'CONFLUENT_KEYCLOAK_REALM|confluent|'
+    'CONFLUENT_KEYCLOAK_CLIENT_ID|confluent-cli|'
+    'CONFLUENT_KEYCLOAK_ADMIN_USER|admin|'
+    'CONFLUENT_KEYCLOAK_SECRET|confluent-keycloak|'
+    'CONFLUENT_MDS_OAUTH_JWKS_URL||# Set these to use an EXTERNAL OIDC provider instead of the bundled Keycloak.'
+    'CONFLUENT_MDS_OAUTH_ISSUER||'
+    'CONFLUENT_MDS_OAUTH_AUDIENCE|Confluent|'
+    'CONFLUENT_MDS_OAUTH_SUB_CLAIM|preferred_username|'
+    'CONFLUENT_MDS_OAUTH_GROUPS_CLAIM|groups|'
+    'CONFLUENT_MDS_OAUTH_DEVICE_AUTH_URL||# Device-authorization endpoint; enables \"confluent login --no-browser\".'
+    'CONFLUENT_EXTERNAL_KAFKA_ENABLED|true|# ---- External Kafka access (passthrough routes + SASL_SSL) -------------------
+# Adds an EXTERNAL listener advertised on per-broker TLS passthrough routes, so
+# Kafka clients anywhere can reach the right partition leader over port 443.
+# The OpenShift router selects the broker by TLS SNI.
+#
+# Requires CONFLUENT_SASL_ENABLED=true - this listener is internet-facing, so it
+# is SASL_SSL (encrypted) rather than the SASL_PLAINTEXT used inside the cluster.
+# Provisioned by x.4_confluent_add_external_access.sh.'
+    'CONFLUENT_EXTERNAL_KAFKA_PORT|9094|# Container port for the EXTERNAL listener; advertised on 443 via the routes.'
+    'CONFLUENT_EXTERNAL_TLS_SECRET|confluent-kafka-tls|# Holds the generated CA plus the per-broker keystore/truststore.'
+    'CONFLUENT_EXTERNAL_CERT_VALIDITY_DAYS|825|'
     'CONFLUENT_C3_VERSION|2.5.0|# ---- Control Center / monitoring ---------------------------------------------
 # C3 next-gen and its Prometheus/Alertmanager ship on their own version line,
 # separate from CONFLUENT_VERSION. All three must match.'
@@ -256,7 +306,17 @@ for _entry in "${_platform_defaults[@]}"; do
 
     _backfilled_names+=("${_name}")
     [[ -n "${_comment}" ]] && _backfill+=$'\n'"${_comment}"
-    _backfill+=$'\n'"export ${_name}=\"${_value}\""
+    # Feature toggles are written as ${VAR:-default} so that a parent script can
+    # export a different value and have it survive: x.2/x.4 flip these on and
+    # then invoke 1.1_confluent_install.sh, which re-sources this file. A plain
+    # assignment would silently overwrite the export and the feature would look
+    # like it applied while changing nothing.
+    case "${_name}" in
+        *_ENABLED)
+            _backfill+=$'\n'"export ${_name}=\"\${${_name}:-${_value}}\"" ;;
+        *)
+            _backfill+=$'\n'"export ${_name}=\"${_value}\"" ;;
+    esac
 done
 
 if [[ -n "${_backfill}" ]] && ! $DRY_RUN; then

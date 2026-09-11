@@ -117,9 +117,29 @@ ALERTMANAGER_URL="http://alertmanager:${CONFLUENT_ALERTMANAGER_PORT}"
 : "${CONFLUENT_SASL_ADMIN_USER:=confluent-admin}"
 : "${CONFLUENT_SASL_SECRET:=confluent-sasl}"
 
+# MDS implies SASL. MDS issues tokens to principals that must already be able to
+# authenticate to Kafka, so SASL is a hard prerequisite rather than an
+# independent choice. Turning it on here (instead of refusing with an error the
+# user then has to fix by hand) means CONFLUENT_MDS_ENABLED=true is enough on
+# its own, and a fresh install reaches MDS in one command.
+#
+# CONFLUENT_MDS_ENABLED gets its own default further down, with the rest of the
+# MDS settings; it is read here before that, hence the explicit fallback.
+: "${CONFLUENT_MDS_ENABLED:=false}"
+if [[ "${CONFLUENT_MDS_ENABLED}" == "true" && "${CONFLUENT_SASL_ENABLED}" != "true" ]]; then
+    echo "[INFO] CONFLUENT_MDS_ENABLED=true implies SASL; enabling it (MDS requires it)."
+    CONFLUENT_SASL_ENABLED="true"
+fi
+
+# Defaulted here, not with the other external-listener settings further down:
+# the SASL block below needs it and set -u would abort on an unset variable.
+: "${CONFLUENT_EXTERNAL_KAFKA_ENABLED:=false}"
+
 _broker_protocol_map="CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
 _broker_sasl_env=""
 _client_sasl_env=""
+_jaas_props=""
+_broker_launch="              exec /etc/confluent/docker/run"
 _connect_sasl_env=""
 _ksql_sasl_env=""
 _c3_sasl_env=""
@@ -143,15 +163,46 @@ if [[ "${CONFLUENT_SASL_ENABLED}" == "true" ]]; then
     # in the value and Kafka would fail to parse the login module.
     _jaas="org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${CONFLUENT_SASL_ADMIN_USER}\" password=\"${SASL_ADMIN_PW}\";"
 
+    # The listener-scoped JAAS config CANNOT be passed as an environment
+    # variable. The image lowercases KAFKA_* names and turns every underscore
+    # into a dot, so KAFKA_LISTENER_NAME_PLAINTEXT_SCRAM_SHA_512_SASL_JAAS_CONFIG
+    # becomes listener.name.plaintext.scram.sha.512.sasl.jaas.config - but Kafka
+    # wants the mechanism hyphenated: listener.name.plaintext.scram-sha-512....
+    # The dotted key is silently ignored and the broker dies with
+    # "Could not find a 'KafkaServer' or 'plaintext.KafkaServer' entry in the
+    # JAAS configuration". The unprefixed sasl.jaas.config does NOT satisfy it
+    # either (verified: the SASL listener still fails to build), so these two
+    # properties are appended to kafka.properties in the startup command below,
+    # where hyphens survive.
+    _jaas_props="listener.name.plaintext.${CONFLUENT_SASL_MECHANISM:l}.sasl.jaas.config=${_jaas}
+listener.name.plaintext_host.${CONFLUENT_SASL_MECHANISM:l}.sasl.jaas.config=${_jaas}"
+
+    # Replicate what /etc/confluent/docker/run does (configure -> ensure ->
+    # launch) so the JAAS properties can be appended to the generated config
+    # between the first two phases.
+    # Written with printf, not a heredoc: a heredoc body would have to start at
+    # column 1, which breaks out of the YAML block scalar this is embedded in.
+    _jaas_line1="listener.name.plaintext.${CONFLUENT_SASL_MECHANISM:l}.sasl.jaas.config=${_jaas}"
+    _jaas_line2="listener.name.plaintext_host.${CONFLUENT_SASL_MECHANISM:l}.sasl.jaas.config=${_jaas}"
+    # The EXTERNAL listener needs the same treatment for the same reason: its
+    # env-var form becomes listener.name.external.scram.sha.512... (dots), which
+    # Kafka ignores, and the broker dies with "Could not find a 'KafkaServer' or
+    # 'external.KafkaServer' entry". The line is only appended when that
+    # listener exists, so the non-external case is unchanged.
+    _jaas_line3=""
+    if [[ "${CONFLUENT_EXTERNAL_KAFKA_ENABLED}" == "true" ]]; then
+        _jaas_line3=" 'listener.name.external.${CONFLUENT_SASL_MECHANISM:l}.sasl.jaas.config=${_jaas}'"
+    fi
+    _broker_launch="              /etc/confluent/docker/configure
+              printf '%s\\n' '${_jaas_line1}' '${_jaas_line2}'${_jaas_line3} >> /etc/kafka/kafka.properties
+              /etc/confluent/docker/ensure
+              exec /etc/confluent/docker/launch"
+
     _broker_sasl_env="
             - name: KAFKA_SASL_ENABLED_MECHANISMS
               value: '${CONFLUENT_SASL_MECHANISM}'
             - name: KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL
               value: '${CONFLUENT_SASL_MECHANISM}'
-            - name: KAFKA_LISTENER_NAME_PLAINTEXT_${CONFLUENT_SASL_MECHANISM//-/_}_SASL_JAAS_CONFIG
-              value: '${_jaas}'
-            - name: KAFKA_LISTENER_NAME_PLAINTEXT__HOST_${CONFLUENT_SASL_MECHANISM//-/_}_SASL_JAAS_CONFIG
-              value: '${_jaas}'
             - name: KAFKA_SUPER_USERS
               value: 'User:${CONFLUENT_SASL_ADMIN_USER}'"
 
@@ -238,7 +289,16 @@ if [[ "${CONFLUENT_SASL_ENABLED}" == "true" ]]; then
         fi
     else
         # Fresh cluster: defer SASL to a second pass so the brokers can form.
+        #
+        # Only the brokers are deployed on this pass. Every other component is
+        # a Kafka client, and their SASL settings are blanked below because the
+        # listeners are still PLAINTEXT - so deploying them now would start them
+        # on a config that the second pass immediately replaces, rolling each
+        # workload twice. They are skipped here and deployed once, correctly
+        # configured, on the second pass. This is what made enabling MDS on a
+        # fresh cluster look like three separate installs.
         _sasl_deferred=true
+        _brokers_only=true
         _broker_protocol_map="CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
         _broker_sasl_env=""
         _client_sasl_env=""; _restproxy_sasl_env=""; _connect_sasl_env=""
@@ -249,6 +309,330 @@ if [[ "${CONFLUENT_SASL_ENABLED}" == "true" ]]; then
     echo "[INFO] SASL enabled (${CONFLUENT_SASL_MECHANISM}, admin user ${CONFLUENT_SASL_ADMIN_USER})."
 else
     _restproxy_sasl_env=""
+fi
+
+# ------------------------------------------------------------------------------
+# MDS / RBAC and the external Kafka listener
+# ------------------------------------------------------------------------------
+# Both are provisioned by the x.4_* scripts; this section only renders what they
+# turned on. MDS is embedded in the cp-server image, so enabling it adds env and
+# a mounted token keypair rather than a new component.
+: "${CONFLUENT_MDS_ENABLED:=false}"
+: "${CONFLUENT_MDS_PORT:=8090}"
+: "${CONFLUENT_MDS_SECRET:=confluent-mds}"
+: "${CONFLUENT_MDS_USER_STORE:=LDAP}"
+: "${CONFLUENT_MDS_SUPER_USER:=mds-admin}"
+# Identifies this MDS instance as the authority behind every role binding.
+: "${CONFLUENT_MDS_AUTHORITY_NAME:=Confluent}"
+: "${CONFLUENT_LICENSE_KEY:=}"
+: "${CONFLUENT_LDAP_PORT:=1389}"
+: "${CONFLUENT_LDAP_DOMAIN:=confluent.io}"
+: "${CONFLUENT_LDAP_ADMIN_USER:=admin}"
+: "${CONFLUENT_LDAP_SECRET:=confluent-ldap}"
+: "${CONFLUENT_KEYCLOAK_REALM:=confluent}"
+: "${CONFLUENT_MDS_OAUTH_JWKS_URL:=}"
+: "${CONFLUENT_MDS_OAUTH_ISSUER:=}"
+: "${CONFLUENT_MDS_OAUTH_AUDIENCE:=Confluent}"
+: "${CONFLUENT_MDS_OAUTH_SUB_CLAIM:=preferred_username}"
+: "${CONFLUENT_MDS_OAUTH_GROUPS_CLAIM:=groups}"
+: "${CONFLUENT_MDS_OAUTH_DEVICE_AUTH_URL:=}"
+: "${CONFLUENT_EXTERNAL_KAFKA_ENABLED:=false}"
+: "${CONFLUENT_EXTERNAL_KAFKA_PORT:=9094}"
+: "${CONFLUENT_EXTERNAL_TLS_SECRET:=confluent-kafka-tls}"
+
+_broker_mds_env=""
+_broker_mds_mounts=""
+_mds_advertised_export=""
+_broker_volumes=""
+_broker_mds_svc_port=""
+_broker_mds_container_port=""
+_broker_external_container_port=""
+# Newline used to emit the volumes: block only when something mounted a volume.
+_nl=$'\n'
+_license_env=""
+
+if [[ -n "${CONFLUENT_LICENSE_KEY}" ]]; then
+    _license_env="
+            - name: KAFKA_CONFLUENT_LICENSE
+              value: '${CONFLUENT_LICENSE_KEY}'"
+fi
+
+# On the deferred first pass the brokers are deliberately coming up PLAINTEXT
+# with no SCRAM users registered yet. Turning on the RBAC authorizer now would
+# authorize against a user store that has nobody in it and a metadata topic that
+# does not exist, so the brokers crash-loop before the second pass can fix it.
+# MDS is rendered on the second pass, once SASL is actually live.
+if [[ "${CONFLUENT_MDS_ENABLED}" == "true" && "${_sasl_deferred:-false}" == "true" ]]; then
+    echo "[INFO] Fresh cluster: deferring MDS to the second pass, after SASL is live."
+    CONFLUENT_MDS_ENABLED="false"
+    _mds_deferred=true
+fi
+
+if [[ "${CONFLUENT_MDS_ENABLED}" == "true" ]]; then
+    if [[ "${CONFLUENT_SASL_ENABLED}" != "true" ]]; then
+        echo "[ERROR] CONFLUENT_MDS_ENABLED=true requires CONFLUENT_SASL_ENABLED=true." >&2
+        echo "[ERROR] Run x.2_confluent_add_sasl.sh first." >&2
+        exit 1
+    fi
+    if ! oc get secret "${CONFLUENT_MDS_SECRET}" -n "${NS}" &>/dev/null; then
+        echo "[ERROR] CONFLUENT_MDS_ENABLED=true but secret '${CONFLUENT_MDS_SECRET}' is missing." >&2
+        echo "[ERROR] Run x.4_confluent_add_mds.sh, which generates the token keypair." >&2
+        exit 1
+    fi
+
+    # The user store. LDAP is a direct bind against the bundled OpenLDAP; OAUTH
+    # validates JWTs against a JWKS endpoint and needs no directory at all.
+    _mds_store_env=""
+    if [[ "${CONFLUENT_MDS_USER_STORE:u}" == "OAUTH" ]]; then
+        _jwks="${CONFLUENT_MDS_OAUTH_JWKS_URL}"
+        _issuer="${CONFLUENT_MDS_OAUTH_ISSUER}"
+        _device="${CONFLUENT_MDS_OAUTH_DEVICE_AUTH_URL}"
+        # Fall back to the bundled Keycloak's route when no external IdP is set.
+        if [[ -z "${_jwks}" ]]; then
+            _kc_host="$(oc get route keycloak -n "${NS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)"
+            if [[ -z "${_kc_host}" ]]; then
+                echo "[ERROR] MDS user store is OAUTH but neither CONFLUENT_MDS_OAUTH_JWKS_URL nor a" >&2
+                echo "[ERROR] Keycloak route exists. Run x.4_confluent_user_store.sh first." >&2
+                exit 1
+            fi
+            _base="https://${_kc_host}/realms/${CONFLUENT_KEYCLOAK_REALM}"
+            _jwks="${_base}/protocol/openid-connect/certs"
+            _issuer="${_base}"
+            _device="${_base}/protocol/openid-connect/auth/device"
+        fi
+        _mds_store_env="
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_USER_STORE
+              value: 'OAUTH'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OAUTHBEARER_JWKS_ENDPOINT_URL
+              value: '${_jwks}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OAUTHBEARER_EXPECTED_ISSUER
+              value: '${_issuer}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OAUTHBEARER_EXPECTED_AUDIENCE
+              value: '${CONFLUENT_MDS_OAUTH_AUDIENCE}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OAUTHBEARER_SUB_CLAIM_NAME
+              value: '${CONFLUENT_MDS_OAUTH_SUB_CLAIM}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OAUTHBEARER_GROUPS_CLAIM_NAME
+              value: '${CONFLUENT_MDS_OAUTH_GROUPS_CLAIM}'"
+        [[ -n "${_device}" ]] && _mds_store_env="${_mds_store_env}
+            - name: KAFKA_CONFLUENT_OIDC_IDP_DEVICE_AUTHORIZATION_ENDPOINT_URI
+              value: '${_device}'"
+    else
+        _ldap_base_dn="dc=${CONFLUENT_LDAP_DOMAIN//./,dc=}"
+        _ldap_admin_pw="$(oc get secret "${CONFLUENT_LDAP_SECRET}" -n "${NS}" \
+            -o jsonpath="{.data.${CONFLUENT_LDAP_ADMIN_USER}}" 2>/dev/null | base64 --decode || true)"
+        if [[ -z "${_ldap_admin_pw}" ]]; then
+            echo "[ERROR] MDS user store is LDAP but secret '${CONFLUENT_LDAP_SECRET}' has no entry" >&2
+            echo "[ERROR] for '${CONFLUENT_LDAP_ADMIN_USER}'. Run x.4_confluent_user_store.sh first." >&2
+            exit 1
+        fi
+        # SIMPLE bind against the bundled OpenLDAP. Users live under ou=users,
+        # which is where the Bitnami image seeds LDAP_USERS.
+        #
+        # The user store must be declared explicitly. Without it MDS does not
+        # wire the LDAP plugin at all: the ldap.* properties below are read but
+        # never consulted, and every login fails with "user not found" even
+        # though the directory is reachable and correctly populated.
+        _mds_store_env="
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_USER_STORE
+              value: 'LDAP'
+            # Derive the principal mapping from GROUP entries. The default is
+            # GROUPS, but it is pinned explicitly because the two modes need
+            # different search bases and silently return nothing when they
+            # disagree. The ldap.user.* settings below are required in BOTH
+            # modes - they are what the authenticate endpoint binds with.
+            - name: KAFKA_LDAP_SEARCH_MODE
+              value: 'GROUPS'
+            - name: KAFKA_LDAP_JAVA_NAMING_PROVIDER_URL
+              value: 'ldap://openldap:${CONFLUENT_LDAP_PORT}'
+            - name: KAFKA_LDAP_JAVA_NAMING_SECURITY_PRINCIPAL
+              value: 'cn=${CONFLUENT_LDAP_ADMIN_USER},${_ldap_base_dn}'
+            - name: KAFKA_LDAP_JAVA_NAMING_SECURITY_CREDENTIALS
+              value: '${_ldap_admin_pw}'
+            - name: KAFKA_LDAP_JAVA_NAMING_SECURITY_AUTHENTICATION
+              value: 'simple'
+            - name: KAFKA_LDAP_USER_SEARCH_BASE
+              value: 'ou=users,${_ldap_base_dn}'
+            - name: KAFKA_LDAP_USER_NAME_ATTRIBUTE
+              value: 'cn'
+            - name: KAFKA_LDAP_USER_OBJECT_CLASS
+              value: 'inetOrgPerson'
+            - name: KAFKA_LDAP_GROUP_SEARCH_BASE
+              value: 'ou=groups,${_ldap_base_dn}'
+            - name: KAFKA_LDAP_GROUP_NAME_ATTRIBUTE
+              value: 'cn'
+            - name: KAFKA_LDAP_GROUP_OBJECT_CLASS
+              value: 'groupOfNames'
+            - name: KAFKA_LDAP_GROUP_MEMBER_ATTRIBUTE
+              value: 'member'"
+    fi
+
+    # The RBAC authorizer replaces the ACL authorizer. ALLOW_EVERYONE_IF_NO_ACL
+    # is deliberately absent: with RBAC on, access comes from role bindings.
+    #
+    # NOTE: everything below is inside a double-quoted string, so a '#' there is
+    # NOT a shell comment and any double quote would end the string early. Keep
+    # explanations out here, and out of the YAML body.
+    #
+    # AUTHENTICATION_METHOD must be BEARER. This is counter-intuitive: BEARER is
+    # what ENABLES the endpoint that mints tokens from a username and password
+    # (GET /security/1.0/authenticate), which is exactly what a CLI login calls.
+    # Confluent's docs are explicit that a 404 from that endpoint means bearer
+    # token authentication is not enabled:
+    #   https://docs.confluent.io/platform/current/security/rbac/mds-api.html
+    # BASIC is NOT a valid value here - setting it leaves the auth application
+    # unregistered, so MDS still serves the RBAC and metadata APIs (role
+    # bindings work over HTTP basic auth) while every login 404s.
+    #
+    # There is no separate public-key setting: token.key.path points at a single
+    # PEM holding the public/private PAIR, per
+    #   https://docs.confluent.io/platform/current/kafka/configure-mds/mds-configuration.html
+    # confluent.metadata.server.public.key.path is not a recognised property -
+    # the broker logs it under "supplied but are not used".
+    _broker_mds_env="
+            - name: KAFKA_AUTHORIZER_CLASS_NAME
+              value: 'io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer'
+            - name: KAFKA_CONFLUENT_AUTHORIZER_ACCESS_RULE_PROVIDERS
+              value: 'CONFLUENT,KRAFT_ACL'
+            # The name of the MDS authority that owns role bindings. REQUIRED
+            # whenever the CONFLUENT access-rule provider is on: left empty the
+            # authorizer never finishes initialising, so the broker half of the
+            # process cannot register with the controller quorum and dies while
+            # waiting for broker metadata to catch up, with no authorizer error
+            # of its own. It is also the scope name role bindings are created
+            # against, so it must stay stable: changing it orphans every
+            # existing binding.
+            - name: KAFKA_CONFLUENT_AUTHORIZER_AUTHORITY_NAME
+              value: '${CONFLUENT_MDS_AUTHORITY_NAME}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_LISTENERS
+              value: 'http://0.0.0.0:${CONFLUENT_MDS_PORT}'
+            # BEARER, not BASIC: see the note above the block.
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_AUTHENTICATION_METHOD
+              value: 'BEARER'
+            # One PEM holding the public/private pair; there is no separate
+            # public-key property. See the note above the block.
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_TOKEN_KEY_PATH
+              value: '/etc/confluent/mds/tokenKeypair.pem'
+            - name: KAFKA_CONFLUENT_METADATA_TOPIC_REPLICATION_FACTOR
+              value: '${CONFLUENT_REPLICATION_FACTOR}'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_OPENAPI_ENABLE
+              value: 'true'
+            - name: KAFKA_CONFLUENT_METADATA_SERVER_CLUSTER_REGISTRY_ENABLE
+              value: 'true'${_mds_store_env}"
+
+    # KAFKA_SUPER_USERS must list the SASL admin, the MDS super user, AND
+    # ANONYMOUS, or the ConfluentServerAuthorizer denies the brokers' own
+    # inter-broker and metadata-topic requests and the cluster never forms.
+    #
+    # ANONYMOUS is required because the CONTROLLER listener stays PLAINTEXT (see
+    # the protocol map above: KRaft cannot authenticate against SCRAM stored in
+    # the very metadata log it is trying to form). An unauthenticated listener
+    # gives every request the principal User:ANONYMOUS, so once RBAC is on the
+    # raft client is denied CLUSTER_ACTION and the process kills itself with
+    #   Encountered fatal fault: Unexpected error in raft IO thread
+    #   ClusterAuthorizationException: Request FETCH needs CLUSTER_ACTION
+    # This is safe: the controller listener is reachable only inside the pod
+    # network and is never advertised outside the cluster.
+    #
+    # It cannot be done by rewriting _broker_sasl_env: that variable is emptied
+    # on the deferred fresh-cluster path above, so the substitution matched
+    # nothing and the brokers came up with NO super users at all. Emit the value
+    # here instead, and strip any KAFKA_SUPER_USERS the SASL block already added
+    # so the key appears exactly once (a repeated env name is a rejected pod).
+    _sq="'"
+    _broker_sasl_env="${_broker_sasl_env//"
+            - name: KAFKA_SUPER_USERS
+              value: ${_sq}User:${CONFLUENT_SASL_ADMIN_USER}${_sq}"/}"
+    _broker_mds_env="${_broker_mds_env}
+            - name: KAFKA_SUPER_USERS
+              value: 'User:${CONFLUENT_SASL_ADMIN_USER};User:${CONFLUENT_MDS_SUPER_USER};User:ANONYMOUS'"
+
+    # Must be exported at runtime, not set as a pod env value: it has to carry
+    # this pod's own FQDN, and a Kubernetes env value is never shell-expanded.
+    _mds_advertised_export="              export KAFKA_CONFLUENT_METADATA_SERVER_ADVERTISED_LISTENERS=\"http://\${FQDN}:${CONFLUENT_MDS_PORT}\"
+"
+    _broker_mds_mounts="
+            - name: mds-token
+              mountPath: /etc/confluent/mds
+              readOnly: true"
+    # Named 'http' because expose_route targets the port by NAME.
+    _broker_mds_svc_port="
+    - name: http
+      port: ${CONFLUENT_MDS_PORT}
+      targetPort: ${CONFLUENT_MDS_PORT}"
+    _broker_mds_container_port="
+            - containerPort: ${CONFLUENT_MDS_PORT}"
+    _broker_volumes="${_broker_volumes}
+        - name: mds-token
+          secret:
+            secretName: ${CONFLUENT_MDS_SECRET}
+            defaultMode: 0400"
+
+    echo "[INFO] MDS enabled on port ${CONFLUENT_MDS_PORT} (user store: ${CONFLUENT_MDS_USER_STORE:u})."
+    [[ -z "${CONFLUENT_LICENSE_KEY}" ]] && \
+        echo "[WARN] No CONFLUENT_LICENSE_KEY: MDS/RBAC run on the built-in 30-day trial."
+fi
+
+# ------------------------------------------------------------------------------
+# External Kafka listener (SASL_SSL on per-broker passthrough routes)
+# ------------------------------------------------------------------------------
+_broker_external_env=""
+_external_listener=""
+_external_advertised=""
+
+if [[ "${CONFLUENT_EXTERNAL_KAFKA_ENABLED}" == "true" ]]; then
+    if [[ "${CONFLUENT_SASL_ENABLED}" != "true" ]]; then
+        echo "[ERROR] CONFLUENT_EXTERNAL_KAFKA_ENABLED=true requires CONFLUENT_SASL_ENABLED=true." >&2
+        exit 1
+    fi
+    if ! oc get secret "${CONFLUENT_EXTERNAL_TLS_SECRET}" -n "${NS}" &>/dev/null; then
+        echo "[ERROR] CONFLUENT_EXTERNAL_KAFKA_ENABLED=true but secret" >&2
+        echo "[ERROR] '${CONFLUENT_EXTERNAL_TLS_SECRET}' is missing. Run" >&2
+        echo "[ERROR] x.4_confluent_add_external_access.sh, which generates the certificates." >&2
+        exit 1
+    fi
+
+    _ext_domain="${CONFLUENT_ROUTE_DOMAIN:-}"
+    [[ -z "${_ext_domain}" ]] && _ext_domain="$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')"
+    _store_pw="$(oc get secret "${CONFLUENT_EXTERNAL_TLS_SECRET}" -n "${NS}" \
+        -o jsonpath='{.data.storePassword}' | base64 --decode)"
+
+    _broker_protocol_map="${_broker_protocol_map},EXTERNAL:SASL_SSL"
+    _external_listener=",EXTERNAL://0.0.0.0:${CONFLUENT_EXTERNAL_KAFKA_PORT}"
+    # Advertised on 443: that is the router's port, not the container's. The
+    # route hostname is also the SNI the client sends, which is how the router
+    # picks this specific broker.
+    _external_advertised=",EXTERNAL://broker-\${ORDINAL}-kafka-${NS}.${_ext_domain}:443"
+
+    # No KAFKA_LISTENER_NAME_EXTERNAL_..._SASL_JAAS_CONFIG here: the env-var
+    # form loses the hyphens the mechanism name needs and Kafka ignores it.
+    # That property is appended to kafka.properties in _broker_launch instead.
+    _broker_external_env="
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_KEYSTORE_LOCATION
+              value: '/etc/confluent/tls/keystore.jks'
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_KEYSTORE_PASSWORD
+              value: '${_store_pw}'
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_KEY_PASSWORD
+              value: '${_store_pw}'
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_TRUSTSTORE_LOCATION
+              value: '/etc/confluent/tls/truststore.jks'
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_TRUSTSTORE_PASSWORD
+              value: '${_store_pw}'
+            - name: KAFKA_LISTENER_NAME_EXTERNAL_SSL_CLIENT_AUTH
+              value: 'none'"
+
+    _broker_mds_mounts="${_broker_mds_mounts}
+            - name: kafka-tls
+              mountPath: /etc/confluent/tls
+              readOnly: true"
+    _broker_external_container_port="
+            - containerPort: ${CONFLUENT_EXTERNAL_KAFKA_PORT}"
+    _broker_volumes="${_broker_volumes}
+        - name: kafka-tls
+          secret:
+            secretName: ${CONFLUENT_EXTERNAL_TLS_SECRET}
+            defaultMode: 0400"
+
+    echo "[INFO] External Kafka listener enabled (SASL_SSL, advertised on *.${_ext_domain}:443)."
 fi
 
 BOOTSTRAP="broker-headless:${CONFLUENT_BROKER_INTERNAL_PORT}"
@@ -265,7 +649,21 @@ mkdir -p "${MANIFEST_DIR}"
 apply_component() {
     local name="$1"
     local file="${MANIFEST_DIR}/${name}.yaml"
+    # The manifest is always rendered, even when it is not applied: it is the
+    # record of what this run would deploy, and writing it keeps --dry-run style
+    # inspection honest.
     cat > "${file}"
+
+    # On the deferred first pass only the brokers are deployed. Every component
+    # reaching this helper is a Kafka client whose SASL settings are still blank
+    # (the listeners have not flipped yet), so applying it now would start it on
+    # a config the second pass immediately replaces - rolling each workload
+    # twice for no benefit. Brokers bypass this helper, so they still deploy.
+    if [[ "${_brokers_only:-false}" == "true" ]]; then
+        echo "[INFO] Skipping ${name} on this pass (brokers first; deployed once SASL is live)."
+        return 0
+    fi
+
     oc apply -f "${file}"
     echo "[INFO] Applied ${name} (manifest: ${file})."
 }
@@ -276,6 +674,8 @@ apply_component() {
 expose_route() {
     local name="$1" port="$2"
     [[ "${CONFLUENT_CREATE_ROUTES}" == "true" ]] || return 0
+    # The service this route targets was not applied on a brokers-only pass.
+    [[ "${_brokers_only:-false}" == "true" ]] && return 0
 
     local host_line=""
     [[ -n "${CONFLUENT_ROUTE_DOMAIN:-}" ]] && host_line="  host: ${name}-${NS}.${CONFLUENT_ROUTE_DOMAIN}"
@@ -309,6 +709,11 @@ EOF
 # ------------------------------------------------------------------------------
 wait_rollout() {
     local kind="$1" name="$2"
+    # Nothing to wait for when the component was skipped this pass. The brokers
+    # are waited on through their own call below, which is not gated.
+    if [[ "${_brokers_only:-false}" == "true" && "${name}" != "broker" ]]; then
+        return 0
+    fi
     echo "[INFO] Waiting for ${kind}/${name} to roll out..."
     oc rollout status "${kind}/${name}" -n "${NS}" --timeout="${CONFLUENT_ROLLOUT_TIMEOUT}"
 }
@@ -365,7 +770,7 @@ spec:
       targetPort: ${CONFLUENT_BROKER_INTERNAL_PORT}
     - name: external
       port: ${CONFLUENT_BROKER_EXTERNAL_PORT}
-      targetPort: ${CONFLUENT_BROKER_EXTERNAL_PORT}
+      targetPort: ${CONFLUENT_BROKER_EXTERNAL_PORT}${_broker_mds_svc_port}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -407,7 +812,7 @@ spec:
             - containerPort: ${CONFLUENT_BROKER_INTERNAL_PORT}
             - containerPort: ${CONFLUENT_BROKER_CONTROLLER_PORT}
             - containerPort: ${CONFLUENT_BROKER_EXTERNAL_PORT}
-            - containerPort: ${CONFLUENT_BROKER_JMX_PORT}
+            - containerPort: ${CONFLUENT_BROKER_JMX_PORT}${_broker_mds_container_port}${_broker_external_container_port}
           env:
             # Derive the KRaft node id from the ordinal in the StatefulSet name.
             - name: POD_NAME
@@ -417,7 +822,7 @@ spec:
             - name: KAFKA_PROCESS_ROLES
               value: 'broker,controller'
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: '${_broker_protocol_map}'
+              value: '${_broker_protocol_map}'${_broker_mds_env}${_broker_external_env}${_license_env}
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: 'PLAINTEXT'
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
@@ -430,6 +835,20 @@ spec:
               value: '${CONFLUENT_REPLICATION_FACTOR}'
             - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
               value: '${CONFLUENT_MIN_INSYNC_REPLICAS}'
+            # Raised from the 15 minute default for Flink. Flinks exactly-once
+            # Kafka sink opens a transaction per checkpoint and requests a
+            # 1 hour timeout; a broker that caps it lower rejects the producer
+            # outright and the write task restart-loops with
+            #   KafkaException: Unexpected error in InitProducerIdResponse; The
+            #   transaction timeout is larger than the maximum value allowed by
+            #   the broker (as configured by transaction.max.timeout.ms).
+            # Neither CMF nor Flink SQL exposes a way to lower the request -
+            # it is not among the table options CMF accepts, and it is not a
+            # cluster-level Flink config - so the broker has to allow it. This
+            # is also not dynamically updatable: it needs a broker restart,
+            # which is why it lives here rather than in the Flink scripts.
+            - name: KAFKA_TRANSACTION_MAX_TIMEOUT_MS
+              value: '3600000'
             - name: KAFKA_MIN_INSYNC_REPLICAS
               value: '${CONFLUENT_MIN_INSYNC_REPLICAS}'
             - name: KAFKA_DEFAULT_REPLICATION_FACTOR
@@ -497,16 +916,16 @@ spec:
               ORDINAL="\${POD_NAME##*-}"
               export KAFKA_NODE_ID="\$(( ORDINAL + 1 ))"
               FQDN="\${POD_NAME}.broker-headless.${NS}.svc.cluster.local"
-              export KAFKA_LISTENERS="PLAINTEXT://0.0.0.0:${CONFLUENT_BROKER_INTERNAL_PORT},CONTROLLER://0.0.0.0:${CONFLUENT_BROKER_CONTROLLER_PORT},PLAINTEXT_HOST://0.0.0.0:${CONFLUENT_BROKER_EXTERNAL_PORT}"
-              export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://\${FQDN}:${CONFLUENT_BROKER_INTERNAL_PORT},PLAINTEXT_HOST://broker:${CONFLUENT_BROKER_EXTERNAL_PORT}"
+              export KAFKA_LISTENERS="PLAINTEXT://0.0.0.0:${CONFLUENT_BROKER_INTERNAL_PORT},CONTROLLER://0.0.0.0:${CONFLUENT_BROKER_CONTROLLER_PORT},PLAINTEXT_HOST://0.0.0.0:${CONFLUENT_BROKER_EXTERNAL_PORT}${_external_listener}"
+              export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://\${FQDN}:${CONFLUENT_BROKER_INTERNAL_PORT},PLAINTEXT_HOST://broker:${CONFLUENT_BROKER_EXTERNAL_PORT}${_external_advertised}"
               # JMX must advertise the pod's own name, not localhost, or remote
               # JMX clients get an unreachable stub address.
               export KAFKA_JMX_PORT="${CONFLUENT_BROKER_JMX_PORT}"
               export KAFKA_JMX_HOSTNAME="\${FQDN}"
-              exec /etc/confluent/docker/run
+${_mds_advertised_export}${_broker_launch}
           volumeMounts:
             - name: confluent-broker-data
-              mountPath: /var/lib/kafka/data
+              mountPath: /var/lib/kafka/data${_broker_mds_mounts}
           readinessProbe:
             tcpSocket:
               port: ${CONFLUENT_BROKER_INTERNAL_PORT}
@@ -520,6 +939,7 @@ spec:
             limits:
               cpu: "${CONFLUENT_BROKER_CPU_LIMIT}"
               memory: "${CONFLUENT_BROKER_MEM_LIMIT}"
+${_broker_volumes:+${_nl}      volumes:${_broker_volumes}}
   # One PVC per broker. A shared ReadWriteOnce claim cannot back more than one
   # replica, and each Kafka broker needs its own log dir regardless.
   volumeClaimTemplates:
@@ -536,7 +956,58 @@ spec:
             storage: ${CONFLUENT_BROKER_STORAGE_SIZE}
 EOF
 
+# ------------------------------------------------------------------------------
+# Switching an EXISTING cluster to SASL deadlocks a RollingUpdate: the
+# StatefulSet rolls the highest ordinal first and waits for it to become Ready,
+# but that broker cannot fetch from the peers still running PLAINTEXT
+# ("IllegalSaslStateException: ... enabled mechanisms are []"), so it never
+# goes Ready and the rollout never reaches them. Deleting the lagging pods lets
+# them come back on the new spec together. Only needed when SASL is being
+# turned on over a cluster that is already up.
+if [[ "${CONFLUENT_SASL_ENABLED}" == "true" && "${_sasl_deferred:-false}" != "true" ]]; then
+    _stale=()
+    for _i in $(seq 0 $(( CONFLUENT_BROKER_REPLICAS - 1 ))); do
+        _pod_mech="$(oc get pod "broker-${_i}" -n "${NS}" \
+            -o jsonpath='{.spec.containers[0].env[?(@.name=="KAFKA_SASL_ENABLED_MECHANISMS")].value}' 2>/dev/null || true)"
+        [[ -z "${_pod_mech}" ]] && oc get pod "broker-${_i}" -n "${NS}" &>/dev/null && _stale+=("broker-${_i}")
+    done
+    if (( ${#_stale[@]} > 0 )); then
+        echo "[INFO] Restarting ${#_stale[@]} broker(s) still on the pre-SASL spec: ${_stale[*]}"
+        echo "[INFO] (a rolling update alone cannot cross the PLAINTEXT -> SASL boundary)"
+        oc delete pod "${_stale[@]}" -n "${NS}" --wait=false >/dev/null 2>&1 || true
+    fi
+fi
+
 wait_rollout statefulset broker
+
+# ------------------------------------------------------------------------------
+# MDS route. Not expose_route: that helper names the route after the service,
+# and MDS is served by the shared 'broker' service rather than one of its own.
+# ------------------------------------------------------------------------------
+if [[ "${CONFLUENT_MDS_ENABLED}" == "true" && "${CONFLUENT_CREATE_ROUTES}" == "true" ]]; then
+    _mds_host_line=""
+    [[ -n "${CONFLUENT_ROUTE_DOMAIN:-}" ]] && _mds_host_line="  host: mds-${NS}.${CONFLUENT_ROUTE_DOMAIN}"
+    oc apply -f - >/dev/null <<EOF
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: mds
+  namespace: ${NS}
+  labels:
+    app.kubernetes.io/part-of: confluent
+spec:
+${_mds_host_line}
+  to:
+    kind: Service
+    name: broker
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+EOF
+    echo "[INFO] MDS route created: https://$(oc get route mds -n "${NS}" -o jsonpath='{.spec.host}' 2>/dev/null)"
+fi
 
 # ==============================================================================
 # Schema Registry
@@ -1555,6 +2026,12 @@ if [[ "${_sasl_deferred:-false}" == "true" ]]; then
         fi
     done
     echo "[INFO] Applying the SASL listeners (second pass)..."
+    # Re-assert MDS across the exec: the first pass turned it off locally so the
+    # brokers could form, and the second pass is where it is actually applied.
+    if [[ "${_mds_deferred:-false}" == "true" ]]; then
+        export CONFLUENT_MDS_ENABLED="true"
+        echo "[INFO] MDS will be enabled on this pass."
+    fi
     exec "${SCRIPT_DIR}/$(basename $0)"
 fi
 

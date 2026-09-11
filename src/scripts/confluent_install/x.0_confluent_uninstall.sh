@@ -188,6 +188,16 @@ run oc delete configmap confluent-monitoring-config -n "${NS}" --ignore-not-foun
 # the workload delete above.
 run oc delete pod -n "${NS}" -l app.kubernetes.io/part-of=confluent --ignore-not-found --wait=true
 
+# Secrets minted by the x.2/x.4 scripts. These hold generated credentials, the
+# MDS token keypair and the external-access CA, so they are deleted with the
+# rest of the stack rather than left behind holding stale passwords.
+run oc delete secret -n "${NS}" --ignore-not-found \
+    "${CONFLUENT_SASL_SECRET:-confluent-sasl}" \
+    "${CONFLUENT_MDS_SECRET:-confluent-mds}" \
+    "${CONFLUENT_LDAP_SECRET:-confluent-ldap}" \
+    "${CONFLUENT_KEYCLOAK_SECRET:-confluent-keycloak}" \
+    "${CONFLUENT_EXTERNAL_TLS_SECRET:-confluent-kafka-tls}"
+
 if [[ "${KEEP_DATA}" != "true" ]]; then
     echo "[INFO] Deleting broker PVCs..."
     # The volumeClaimTemplate names claims confluent-broker-data-broker-<n>;
