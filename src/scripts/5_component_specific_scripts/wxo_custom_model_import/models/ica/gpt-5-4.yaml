@@ -1,0 +1,12 @@
+spec_version: v1
+kind: model
+name: openai/gpt-5.4-gus
+display_name: ica/gpt-5-4-gus
+description: |-
+    OpenAI GPT-5.1 Chat via Microsoft Azure - USA hosted and accessed via IBM Consulting Advantage API
+tags:
+- claude-opus
+- openai
+model_type: chat
+provider_config:
+    custom_host: https://api.nextgen-beta.ica.ibm.com/ica/v1/chat-models

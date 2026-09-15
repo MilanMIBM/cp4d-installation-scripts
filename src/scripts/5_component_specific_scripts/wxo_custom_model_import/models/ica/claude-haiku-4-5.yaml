@@ -1,0 +1,13 @@
+spec_version: v1
+kind: model
+name: openai/claude-haiku-4-5
+display_name: ica/claude-haiku-4-5
+description: |-
+    Anthropic Claude Haiku 4.5 via AWS Amazon Bedrock - USA hosted and accessed via IBM Consulting Advantage API
+tags:
+- default
+- claude-haiku
+- openai
+model_type: chat
+provider_config:
+    custom_host: https://api.nextgen-beta.ica.ibm.com/ica/v1/chat-models

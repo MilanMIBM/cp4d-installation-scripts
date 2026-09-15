@@ -1,0 +1,12 @@
+spec_version: v1
+kind: model
+name: openai/claude-opus-4-8
+display_name: ica/claude-opus-4-8
+description: |-
+    Anthropic Claude 4.8 Opus via AWS Amazon Bedrock - USA hosted and accessed via IBM Consulting Advantage API
+tags:
+- claude-opus
+- openai
+model_type: chat
+provider_config:
+    custom_host: https://api.nextgen-beta.ica.ibm.com/ica/v1/chat-models
