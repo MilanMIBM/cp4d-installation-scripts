@@ -277,3 +277,4 @@ mongodb_parsed_conn_credentials/a4c35f59-00d1-4fa3-aefa-0c11bebbd6c3.pem
 # SASL password in plain text, so this must never be committed.
 /src/scripts/confluent_install/flink_install/flink_vars
 /.claude
+/wxdata_api/

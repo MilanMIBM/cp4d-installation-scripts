@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.8"
+__generated_with = "0.24.0"
 app = marimo.App(
     width="full",
     app_title="Cloud Pak For Data - Setup Config Generator",
@@ -205,8 +205,9 @@ def _():
         "entitlements_multiselect": "**Select all of the license entitlements you wish to apply:**",
         "optional_images_multiselect": "**Select any optional models or images you wish to mirror:**",
         "prod_license": "Set licenses to **production** version?",
-        "updating_components": "Are you updating **existing** components?",
+        "updating_components": "Are you updating **existing** components? **DO NOT** Select if installing a new instance.",
         "cp4d_version": "**Cloud Pak for Data version:**",
+        "cp4d_patch": "**Patch ID (optional):**",
         "entitlement_key": "**Input your ibm entitlement key:** *[Get one here](https://myibm.ibm.com/products-services/containerlibrary)*",
         "cluster_url": "**Enter your openshift cluster url:**",
         "cluster_token": "**Enter your openshift token:**",
@@ -224,6 +225,8 @@ def _(
     block_storage_class_select,
     cluster_arch_select,
     cluster_type_select,
+    cp4d_patch_input,
+    cp4d_version_input,
     file_storage_class_select,
     image_pull_creds_select,
     login_argument_select,
@@ -249,6 +252,13 @@ def _(
                 [
                     image_pull_creds_select.style({"width": widget_width}),
                     file_storage_class_select.style({"width": widget_width}),
+                ],
+                justify="space-around",
+            ),
+            mo.hstack(
+                [
+                    cp4d_version_input.style({"width": widget_width}),
+                    cp4d_patch_input.style({"width": widget_width}),
                 ],
                 justify="space-around",
             ),
@@ -286,15 +296,29 @@ def _(
 def _(
     component_selection_tables,
     license_entitlement_table,
+    licenses_are_prod_checkbox,
     optional_images_selection_tables,
     prepare_inst_options_stack,
+    updating_components_checkbox,
 ):
     component_specs_accordion = mo.accordion(
         items={
-            "**License Entitlements**": license_entitlement_table.center(),
-            "**Components to Install**": component_selection_tables.style(
-                {"width": "60%"}
+            "**License Entitlements**": mo.vstack(
+                [
+                    license_entitlement_table,
+                    licenses_are_prod_checkbox.center(),
+                ],
+                gap=1,
             ).center(),
+            "**Components to Install**": mo.vstack(
+                [
+                    component_selection_tables,
+                    updating_components_checkbox,
+                ],
+                gap=1,
+            )
+            .style({"width": "60%"})
+            .center(),
             "*Models & Images to Mirror* ***Optional***": optional_images_selection_tables.style(
                 {"width": "60%"}
             ).center(),
@@ -628,9 +652,7 @@ def _(widget_labels):
     licenses_are_prod_checkbox = mo.ui.checkbox(
         label=widget_labels.get("prod_license"), value=True
     )
-
-    # licenses_are_prod_checkbox
-    return licenses_are_prod_checkbox
+    return (licenses_are_prod_checkbox,)
 
 
 @app.cell
@@ -638,9 +660,7 @@ def _(widget_labels):
     updating_components_checkbox = mo.ui.checkbox(
         label=widget_labels.get("updating_components"), value=False
     )
-
-    # updating_components_checkbox
-    return updating_components_checkbox
+    return (updating_components_checkbox,)
 
 
 @app.cell
@@ -648,11 +668,18 @@ def _(widget_labels):
     cp4d_version_input = mo.ui.text(
         label=widget_labels.get("cp4d_version"),
         value="5.4.0",
-        full_width=False,
+        full_width=True,
     )
+    return (cp4d_version_input,)
 
-    # cp4d_version_input
-    return cp4d_version_input
+
+@app.cell
+def _(widget_labels):
+    cp4d_patch_input = mo.ui.text(
+        label=widget_labels.get("cp4d_patch"),
+        full_width=True,
+    )
+    return (cp4d_patch_input,)
 
 
 @app.cell
