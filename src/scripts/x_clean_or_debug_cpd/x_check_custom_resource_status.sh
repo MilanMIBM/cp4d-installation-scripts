@@ -56,7 +56,7 @@ fi
 
 echo "[INFO] Getting the custom resource status for ${COMPONENT_LIST_STRING} components in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage get-cr-status \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --components=${COMPONENT_LIST_STRING} \
     --include_dependency=${INCLUDE_DEPENDENCIES} \
     "${FILTER_ON_FLAG[@]}" \

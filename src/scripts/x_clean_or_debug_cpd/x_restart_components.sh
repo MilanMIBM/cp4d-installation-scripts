@@ -27,5 +27,5 @@ COMPONENT_LIST_STRING=$(IFS=,; echo "${COMPONENT_LIST[*]}") # Swap with option b
 echo "[INFO] Restarting components: ${COMPONENT_LIST_STRING} in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage restart \
     --components=${COMPONENT_LIST_STRING} \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --verbose

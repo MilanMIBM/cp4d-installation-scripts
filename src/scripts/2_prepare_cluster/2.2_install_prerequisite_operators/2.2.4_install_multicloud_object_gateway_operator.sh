@@ -89,7 +89,7 @@ eval "${CPDM_OC_LOGIN}"
 echo "[INFO] Running setup-mcg for watson_assistant (required by watsonx Orchestrate)..."
 cpd-cli manage setup-mcg \
     --components=watson_assistant \
-    --cpd_instance_ns="${PROJECT_CPD_INST_OPERANDS}" \
+    --instance_ns="${PROJECT_CPD_INST_OPERANDS}" \
     --noobaa_account_secret="${NOOBAA_ACCOUNT_CREDENTIALS_SECRET}" \
     --noobaa_cert_secret="${NOOBAA_ACCOUNT_CERTIFICATE_SECRET}"
 
@@ -109,7 +109,7 @@ eval "${CPDM_OC_LOGIN}"
 echo "[INFO] Running setup-mcg for watsonx_orchestrate..."
 cpd-cli manage setup-mcg \
     --components=watsonx_orchestrate \
-    --cpd_instance_ns="${PROJECT_CPD_INST_OPERANDS}" \
+    --instance_ns="${PROJECT_CPD_INST_OPERANDS}" \
     --noobaa_account_secret="${NOOBAA_ACCOUNT_CREDENTIALS_SECRET}" \
     --noobaa_cert_secret="${NOOBAA_ACCOUNT_CERTIFICATE_SECRET}"
 

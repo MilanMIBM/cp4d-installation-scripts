@@ -17,7 +17,7 @@ _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]];
 eval "${CPDM_OC_LOGIN}"
 
 cpd-cli manage get-cr-status \
-  --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+  --instance_ns=${PROJECT_CPD_INST_OPERANDS}
 
 cpd-cli health operators \
   --operator_ns=${PROJECT_CPD_INST_OPERATORS} \

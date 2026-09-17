@@ -47,7 +47,7 @@ oc apply -f "${CPD_CLI_WORK_PATH}/cluster_scoped_resources.yaml" \
 
 # mv cluster_scoped_resources.yaml "${VERSION}-${PROJECT_CPD_INST_OPERATORS}-cluster_scoped_resources.yaml"
 
-cpd-cli manage authorize-instance-topology \
-    --cpd_operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
-    --verbose
+# cpd-cli manage authorize-instance-topology \
+#     --operator_ns==${PROJECT_CPD_INST_OPERATORS} \
+#     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#     --verbose

@@ -55,7 +55,7 @@
 # ............................................................................
 # IBM Software Hub control plane
 #   cpd-cli manage apply-scale-config \
-#     --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
 #     --components=zen --scale=${SCALE}
 # ............................................................................
 zen:
@@ -550,7 +550,7 @@ scheduler:
 # watsonx.governance
 #   cpd-cli manage update-cr \
 #     --component=watsonx_governance \
-#     --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
 #     --patch="{\"scaleConfig\":\"${SIZE}\"}"
 #   Note: scaling up/down also passes the value to downstream services
 #   such as AI Factsheets and OpenPages.
@@ -566,11 +566,11 @@ watsonx_governance:
 #   Valid sizes: xsmall (default), small_mincpureq, small, medium, large
 #   Watson Speech to Text:
 #     cpd-cli manage update-cr --component=watson_speech \
-#       --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#       --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
 #       --patch="{\"scaleConfig\":{\"stt\":{\"size\":\"${SIZE}\"}}}"
 #   Watson Text to Speech:
 #     cpd-cli manage update-cr --component=watson_speech \
-#       --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+#       --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
 #       --patch="{\"scaleConfig\":{\"tts\":{\"size\":\"${SIZE}\"}}}"
 # ............................................................................
 watson_speech:
@@ -740,7 +740,7 @@ db2wh:
 #     level_5 (large)           -> 10240
 #   Check the current zen scaling configuration with:
 #     cpd-cli manage get-scale-config \
-#       --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} --components=zen
+#       --instance_ns=${PROJECT_CPD_INST_OPERANDS} --components=zen
 #
 #   Override the default by patching the zenservice lite-cr custom resource:
 #     export WORKER_CONNECTIONS=<number-of-connections>

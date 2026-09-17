@@ -25,12 +25,12 @@ esac
 
 if [ "${IMAGE_PULL_PREFIX}" = "icr.io" ]; then
   cpd-cli manage install-cpd-config-ac \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS}
 else
   cpd-cli manage install-cpd-config-ac \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --cpd_config_ac_image=${IMAGE_PULL_PREFIX}/cpopen/cpfs/zen-rsi-adm-controller:${ZEN_VERSION}-${IMAGE_ARCH}
 fi
 
 cpd-cli manage enable-cpd-config-ac \
-  --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+  --instance_ns=${PROJECT_CPD_INST_OPERANDS}

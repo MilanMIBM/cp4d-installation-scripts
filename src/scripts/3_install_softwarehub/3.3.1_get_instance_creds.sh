@@ -18,7 +18,7 @@ eval "${CPDM_OC_LOGIN}"
 
 
 CPD_INSTANCE_DETAILS="$(cpd-cli manage get-cpd-instance-details \
-  --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+  --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
   --get_admin_initial_credentials=true)"
 
 echo "${CPD_INSTANCE_DETAILS}"

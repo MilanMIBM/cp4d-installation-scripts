@@ -44,8 +44,9 @@ for _c in "${_all_components[@]}"; do
 done
 
 cpd-cli manage authorize-instance-topology \
-    --cpd_operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --operator_ns==${PROJECT_CPD_INST_OPERATORS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --verbose \
 
 
 # Apply cluster-wide components (License Service + cert-manager) if ibm-licensing is listed
@@ -55,10 +56,10 @@ if [[ "${HAS_LICENSING}" == true ]]; then
         --release=${VERSION} \
         --license_acceptance=true \
         --licensing_ns=${PROJECT_LICENSE_SERVICE} \
-        --case_download=true \
-        --from_oci=${CP_OPEN_DOWNLOAD} \
         "${PATCH_FLAG[@]}" \
-        --verbose
+        --verbose \
+        # --from_oci=${CP_OPEN_DOWNLOAD} \
+        # --case_download=false \
 
 fi
 
@@ -71,7 +72,7 @@ if [[ "${HAS_SCHEDULER}" == true ]]; then
         --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
         --image_pull_prefix=${IMAGE_PULL_PREFIX} \
         --image_pull_secret=${IMAGE_PULL_SECRET} \
-        --from_oci=${CP_OPEN_DOWNLOAD} \
-        --case_download=true \
-        "${PATCH_FLAG[@]}"
+        "${PATCH_FLAG[@]}" \
+        # --from_oci=${CP_OPEN_DOWNLOAD} \
+        # --case_download=false \
 fi

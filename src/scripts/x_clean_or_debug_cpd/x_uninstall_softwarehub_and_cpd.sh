@@ -21,7 +21,7 @@ OLM_INSTALL=false
 
 echo "[INFO] Deleting ${COMPLETE_COMPONENT_LIST}  CR's in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage delete-cr \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --components=${COMPLETE_COMPONENT_LIST} \
     --include_dependency=true \
     --verbose  || echo "[WARN] delete-cr failed (possibly no permissions or CRs already absent), continuing..."
@@ -30,7 +30,7 @@ cpd-cli manage delete-cr \
 if [[ "${OLM_INSTALL}" == "true" ]]; then
     echo "[INFO] Deleting all OLM Artifacts in ${PROJECT_CPD_INST_OPERATORS}"
     cpd-cli manage delete-olm-artifacts \
-        --cpd_operator_ns=${PROJECT_CPD_INST_OPERATORS} \
+        --operator_ns==${PROJECT_CPD_INST_OPERATORS} \
         --delete_all_components=true
 fi
 
@@ -48,7 +48,7 @@ for entitlement in "${entitlements[@]}"; do
     entitlement="${entitlement// /}"
     echo "[INFO] Removing entitlement: ${entitlement}"
     cpd-cli manage remove-entitlement \
-        --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+        --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
         --entitlement=${entitlement} \
         --production=${PROD_LICENSE} \
         --restart_pods=false
@@ -57,10 +57,10 @@ done
 #---
 echo "[INFO] Uninstalling cpd-config-ac webhook from ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage disable-cpd-config-ac \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS}
 
 cpd-cli manage uninstall-cpd-config-ac \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --verbose
 
 #--- 

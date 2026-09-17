@@ -1,6 +1,6 @@
 #!/bin/zsh
 # =============================================================================
-# env_bootstrap.sh — universal environment loader for cp4d-installation-scripts
+# env_bootstrap.sh - universal environment loader for cp4d-installation-scripts
 # -----------------------------------------------------------------------------
 # Purpose:
 #   Provide a single, location-independent way for any script in this repo to

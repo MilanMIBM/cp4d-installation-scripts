@@ -27,7 +27,7 @@ eval "${CPDM_OC_LOGIN}"
 USE_INFORMIX_SCC_PROFILE=false
 
 if [[ "${USE_INFORMIX_SCC_PROFILE}" == "true" ]]; then
-    INFORMIX_SCC="cpd-cli manage apply-scc --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} --components=informix"
+    INFORMIX_SCC="cpd-cli manage apply-scc --instance_ns=${PROJECT_CPD_INST_OPERANDS} --components=informix"
     echo "[INFO] Applying cpd-cli informix SCC profile."
 else
     INFORMIX_SCC="oc adm policy add-scc-to-user restricted-v2 -z informix -n ${PROJECT_CPD_INST_OPERANDS}"

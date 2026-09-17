@@ -48,7 +48,7 @@ for entitlement in "${entitlements[@]}"; do
     fi
     echo "[INFO] Applying entitlement: ${entitlement} (production=${production})"
     cpd-cli manage apply-entitlement \
-        --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+        --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
         --entitlement=${entitlement} \
         --production=${production}
 done

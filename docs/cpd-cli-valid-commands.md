@@ -168,8 +168,8 @@ Create projects, set up NamespaceScope operator, apply required roles. Run befor
 
 ```bash
 cpd-cli manage authorize-instance-topology \
-  --cpd_operator_ns=<project name> \
-  --cpd_instance_ns=<project name> \
+  --operator_ns==<project name> \
+  --instance_ns=<project name> \
   [--additional_ns=<comma-separated list>] \
   [--preview=true|false] \
   [-v|-vv|-vvv]
@@ -211,7 +211,7 @@ Create a custom security context constraint (SCC) for the `informix` component.
 
 ```bash
 cpd-cli manage apply-scc \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --components=<component names> \
   [--preview=true|false] \
   [-v|-vv|-vvv]
@@ -298,7 +298,7 @@ Get status of installed components (CR status, version, timestamps).
 
 ```bash
 cpd-cli manage get-cr-status \
-  [--cpd_instance_ns=<project name>] \
+  [--instance_ns=<project name>] \
   [--tethered_instance_ns=<comma-separated list>] \
   [--cluster_component_ns=<project name>] \
   [--components=<comma-separated list>] \
@@ -315,7 +315,7 @@ Update the spec of a custom resource for a component.
 cpd-cli manage update-cr \
   --component=<component name> \
   --patch=<patch JSON to apply to spec> \
-  [--cpd_instance_ns=<project name>] \
+  [--instance_ns=<project name>] \
   [--cluster_component_ns=<project name>] \
   [--tethered_instance_ns=<project name>] \
   [-v|-vv|-vvv]
@@ -327,7 +327,7 @@ Delete custom resources for specified components (uninstall step).
 
 ```bash
 cpd-cli manage delete-cr \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --components=<comma-separated list> \
   [--include_dependency=true|false] \
   [--preview=true|false] \
@@ -353,7 +353,7 @@ Remove OLM artifacts (catalog sources, CSVs, subscriptions) for specified compon
 
 ```bash
 cpd-cli manage delete-olm-artifacts \
-  --cpd_operator_ns=<project name> \
+  --operator_ns==<project name> \
   [--components=<comma-separated list>] \
   [--delete_all_components=true] \
   [--delete_shared_catsrc=true] \
@@ -389,7 +389,7 @@ List components installed in a specific IBM Software Hub instance.
 
 ```bash
 cpd-cli manage list-deployed-components \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--scheduler_ns=<project name>] \
   [--all=true|false]
 ```
@@ -420,7 +420,7 @@ Get the web client URL and default `cpadmin` credentials.
 
 ```bash
 cpd-cli manage get-cpd-instance-details \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--get_admin_initial_credentials=true|false]
 ```
 
@@ -435,7 +435,7 @@ cpd-cli manage get-k8s-details \
   [--module=<module-label>] \
   [--kind=deployment|statefulset|configmap|pvc|job|cronjob|service|secret] \
   [--object_name=<resource name>] \
-  [--cpd_instance_ns=<project name>] \
+  [--instance_ns=<project name>] \
   [--dependency=<dependency>] \
   [--scope=<scope>] \
   [--show_scope=true|false] \
@@ -458,7 +458,7 @@ Capture operational K8s state for IBM Support troubleshooting. Output saved to `
 
 ```bash
 cpd-cli manage collect-state \
-  [--cpd_instance_ns=<project name>]
+  [--instance_ns=<project name>]
 ```
 
 ### `versioninfo`
@@ -479,7 +479,7 @@ Change scaling configuration for one or more components.
 
 ```bash
 cpd-cli manage apply-scale-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--tethered_ns=<project name>] \
   [--config='{"component":"level_N",...}'] \
   [--components=<comma-separated list>] \
@@ -494,7 +494,7 @@ Get current scaling configuration for components.
 
 ```bash
 cpd-cli manage get-scale-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--tethered_ns=<project name>] \
   [--components=<comma-separated list>] \
   [--param-file=<file name>]
@@ -506,7 +506,7 @@ Enable or disable horizontal pod autoscaling for components.
 
 ```bash
 cpd-cli manage apply-hpa-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --components=<comma-separated list> \
   --enable_hpa=true|false \
   [--wait=true|false] \
@@ -519,7 +519,7 @@ Get current HPA configuration for components.
 
 ```bash
 cpd-cli manage get-hpa-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--components=<comma-separated list>] \
   [--param-file=<file name>]
 ```
@@ -677,7 +677,7 @@ Give the License Service information about purchased licenses.
 
 ```bash
 cpd-cli manage apply-entitlement \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --entitlement=<license-type> \
   [--production=true|false] \
   [--vpc_node_labels=<comma-separated node labels>] \
@@ -699,7 +699,7 @@ Tell the License Service to stop tracking a specific license.
 
 ```bash
 cpd-cli manage remove-entitlement \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --entitlement=<license-type> \
   [--production=true|false] \
   [--restart_pods=true|false] \
@@ -712,7 +712,7 @@ List entitlements present in an instance namespace.
 
 ```bash
 cpd-cli manage list-entitlements \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--entitlement=<license-type>]
 ```
 
@@ -727,7 +727,7 @@ Restart components in the specified order (restarts dependencies first if needed
 ```bash
 cpd-cli manage restart \
   --components=<comma-separated list> \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--tethered_instance_ns=<project name>] \
   [--preview=true|false] \
   [-v|-vv|-vvv]
@@ -740,7 +740,7 @@ Shut down components in the specified order.
 ```bash
 cpd-cli manage shutdown \
   --components=<comma-separated list> \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--tethered_instance_ns=<project name>] \
   [--include_dependency=true|false] \
   [--force=true|false] \
@@ -766,7 +766,7 @@ Tether a project to the IBM Software Hub control plane project.
 
 ```bash
 cpd-cli manage setup-tethered-ns \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --tethered_instance_ns=<project name> \
   [--remove=true|false] \
   [--preview=true|false] \
@@ -783,7 +783,7 @@ Create proxy configuration resources for IBM Software Hub.
 
 ```bash
 cpd-cli manage create-proxy-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--proxy_host=<proxy host>] \
   [--proxy_port=<proxy port>] \
   [--proxy_user=<proxy user>] \
@@ -798,7 +798,7 @@ Apply an HTTP proxy configuration to an IBM Software Hub instance.
 
 ```bash
 cpd-cli manage enable-proxy \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -808,7 +808,7 @@ Disable the HTTP proxy configuration for an IBM Software Hub instance.
 
 ```bash
 cpd-cli manage disable-proxy \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -818,7 +818,7 @@ Get proxy configuration details and associated RSI patches.
 
 ```bash
 cpd-cli manage get-proxy-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -828,7 +828,7 @@ Delete RSI patches for HTTP proxy configuration.
 
 ```bash
 cpd-cli manage delete-proxy \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -842,7 +842,7 @@ Create or update an RSI patch (env vars, labels, annotations, pod spec).
 
 ```bash
 cpd-cli manage create-rsi-patch \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --patch_name=<patch name> \
   [--patch_type=rsi_pod_env_var|rsi_pod_label|rsi_pod_annotation|rsi_pod_spec] \
   [--description=<description>] \
@@ -862,7 +862,7 @@ Apply all active RSI patches in a project.
 
 ```bash
 cpd-cli manage apply-rsi-patches \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -872,7 +872,7 @@ Get info or status about RSI patches in a project.
 
 ```bash
 cpd-cli manage get-rsi-patch-info \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [--all]
 ```
@@ -883,7 +883,7 @@ Extract and display logs from the RSI webhook pod.
 
 ```bash
 cpd-cli manage get-rsi-patch-logs \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [-v|-vv|-vvv]
 ```
@@ -894,7 +894,7 @@ Delete one or all RSI patches in a project.
 
 ```bash
 cpd-cli manage delete-rsi-patch \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [--all]
 ```
@@ -909,7 +909,7 @@ Install the IBM Software Hub configuration admission controller (`cpd-config-ac`
 
 ```bash
 cpd-cli manage install-cpd-config-ac \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--cpd_config_ac_image=<image location>] \
   [--image_pull_secret=<secret name>] \
   [--preview=true|false] \
@@ -922,7 +922,7 @@ Enable the `cpd-config-ac` webhook. Run after `install-cpd-config-ac`.
 
 ```bash
 cpd-cli manage enable-cpd-config-ac \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -932,7 +932,7 @@ Uninstall the admission controller and remove the mutating webhook.
 
 ```bash
 cpd-cli manage uninstall-cpd-config-ac \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -942,7 +942,7 @@ Update the `cpd-platform-ca-certs` secret and inject it into IBM Software Hub po
 
 ```bash
 cpd-cli manage gen-platform-ca-certs \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--apply=true|false] \
   [-v|-vv|-vvv]
 ```
@@ -953,7 +953,7 @@ Remove the `cpd-platform-ca-certs` secret from pods and delete it.
 
 ```bash
 cpd-cli manage delete-platform-ca-certs \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -963,7 +963,7 @@ List pods injected with `cpd-platform-ca-certs` and pods where injection failed.
 
 ```bash
 cpd-cli manage list-platform-ca-certs-pods \
-  --cpd_instance_ns=<project name>
+  --instance_ns=<project name>
 ```
 
 ---
@@ -977,8 +977,8 @@ Deploy the privileged monitoring service for IBM Software Hub.
 ```bash
 cpd-cli manage apply-privileged-monitoring-service \
   --privileged_service_ns=<project name> \
-  --cpd_operator_ns=<project name> \
-  --cpd_instance_ns=<project name> \
+  --operator_ns==<project name> \
+  --instance_ns=<project name> \
   [--cluster_components_ns=<comma-separated list>] \
   [--enable_hpa=true|false] \
   [--preview=true|false]
@@ -991,8 +991,8 @@ Delete the privileged monitoring service.
 ```bash
 cpd-cli manage delete-privileged-monitoring-service \
   --privileged_service_ns=<project name> \
-  --cpd_operator_ns=<project name> \
-  --cpd_instance_ns=<project name> \
+  --operator_ns==<project name> \
+  --instance_ns=<project name> \
   [--cluster_components_ns=<comma-separated list>]
 ```
 
@@ -1002,7 +1002,7 @@ Deploy service monitors for an IBM Software Hub instance.
 
 ```bash
 cpd-cli manage apply-service-monitor \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--image_prefix=<image location>] \
   [--image_name=<image name>] \
   [--preview=true|false]
@@ -1014,7 +1014,7 @@ Remove service monitors installed by `apply-service-monitor`.
 
 ```bash
 cpd-cli manage delete-service-monitor \
-  --cpd_instance_ns=<project name>
+  --instance_ns=<project name>
 ```
 
 ---
@@ -1478,7 +1478,7 @@ Replace TLS certificate, customize hostname, or change route termination type.
 
 ```bash
 cpd-cli manage setup-route \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--custom_hostname=<hostname>] \
   [--route_secret=<certificate secret name>] \
   [--route_type=reencrypt|passthrough] \
@@ -1496,7 +1496,7 @@ Set up the Identity Management service for connecting to an identity provider.
 ```bash
 cpd-cli manage setup-iam-integration \
   --enable=true \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--preview=true|false] \
   [-v|-vv|-vvv]
 ```
@@ -1513,7 +1513,7 @@ Create App Connect resources required by IBM watsonx Orchestrate.
 cpd-cli manage setup-appconnect \
   --release=<version> \
   --components=watsonx_orchestrate \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   [--appconnect_ns=<project name>] \
   [--preview=true|false] \
   [--upgrade=true|false]
@@ -1526,7 +1526,7 @@ Create secrets for Watson services to connect to Multicloud Object Gateway.
 ```bash
 cpd-cli manage setup-mcg \
   --components=<watson_assistant|watson_discovery|watson_speech|watsonx_orchestrate> \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --noobaa_account_secret=<secret name> \
   --noobaa_cert_secret=<secret name> \
   --noobaa_ns=<project name> \
@@ -1546,7 +1546,7 @@ cpd-cli manage show-minimum-rbac \
   --components=<comma-separated list> \
   --release=<version> \
   [--role_name=<prefix>] \
-  [--cpd_operator_ns=<project name>] \
+  [--operator_ns==<project name>] \
   [--param-file=<file path>] \
   [--use_ns_admin=true|false] \
   [--patch_id=<patch ID>] \
@@ -1563,7 +1563,7 @@ Update configuration data in a ConfigMap. Restarts associated pods.
 
 ```bash
 cpd-cli manage set-config \
-  --cpd_instance_ns=<project name> \
+  --instance_ns=<project name> \
   --configmap_name=<ConfigMap name> \
   [--configmap_spec=<JSON file path>] \
   [--configmap_values=<key:value,...>] \

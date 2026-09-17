@@ -266,3 +266,5 @@ src/scripts/5_component_specific_scripts/wxdata_connector_generators/example_cre
 /src/scripts/confluent_install/confluent_platform_vars/rendered
 /src/scripts/confluent_install/flink_install/flink_vars/rendered
 /src/utils/terraform
+wxdata_api/wxdata_add_db_connection_tests.py
+/old_configs/*

@@ -32,7 +32,7 @@ COMPONENTS_TO_DELETE_STRING=$(IFS=,; echo "${COMPONENTS_TO_DELETE[*]}")
 
 echo "[INFO] Deleting ${COMPONENTS_TO_DELETE}  CR's in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage delete-cr \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --components=${COMPONENTS_TO_DELETE_STRING} \
     --include_dependency=${DELETE_DEPENDENCIES} || echo "[WARN] delete-cr failed (possibly no permissions or CRs already absent), continuing..."
 

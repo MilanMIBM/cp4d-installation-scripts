@@ -52,7 +52,7 @@ COMPONENTS_TO_REINSTALL_STRING="${COMPLETE_COMPONENT_LIST}"
 
 echo "[INFO] Deleting ${COMPONENTS_TO_REINSTALL}  CR's in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage delete-cr \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --components=${COMPONENTS_TO_REINSTALL_STRING} \
     "${PATCH_FLAG[@]}" \
     --include_dependency=${DELETE_DEPENDENCIES} || echo "[WARN] delete-cr failed (possibly no permissions or CRs already absent), continuing..."
@@ -84,8 +84,8 @@ oc apply -f "${CPD_CLI_WORK_PATH}/cluster_scoped_resources.yaml" \
 
 echo "[INFO] Reauthorizing instance topology for ${COMPONENTS_TO_REINSTALL} in ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage authorize-instance-topology \
-    --cpd_operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --operator_ns==${PROJECT_CPD_INST_OPERATORS} \
+    --instance_ns=${PROJECT_CPD_INST_OPERANDS}
 
 
 echo "[INFO] Reinstalling components ${COMPONENTS_TO_REINSTALL} in ${PROJECT_CPD_INST_OPERANDS}"
