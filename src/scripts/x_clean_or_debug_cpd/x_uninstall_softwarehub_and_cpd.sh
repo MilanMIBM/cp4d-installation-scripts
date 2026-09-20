@@ -57,10 +57,10 @@ done
 #---
 echo "[INFO] Uninstalling cpd-config-ac webhook from ${PROJECT_CPD_INST_OPERANDS}"
 cpd-cli manage disable-cpd-config-ac \
-    --instance_ns=${PROJECT_CPD_INST_OPERANDS}
+    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS}
 
 cpd-cli manage uninstall-cpd-config-ac \
-    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+    --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --verbose
 
 #--- 

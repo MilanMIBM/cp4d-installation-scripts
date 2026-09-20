@@ -44,9 +44,9 @@ for _c in "${_all_components[@]}"; do
 done
 
 cpd-cli manage authorize-instance-topology \
-    --operator_ns==${PROJECT_CPD_INST_OPERATORS} \
+    --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
     --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
-    --verbose \
+    --verbose
 
 
 # Apply cluster-wide components (License Service + cert-manager) if ibm-licensing is listed

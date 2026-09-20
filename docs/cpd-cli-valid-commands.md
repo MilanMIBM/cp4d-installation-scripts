@@ -211,7 +211,7 @@ Create a custom security context constraint (SCC) for the `informix` component.
 
 ```bash
 cpd-cli manage apply-scc \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   --components=<component names> \
   [--preview=true|false] \
   [-v|-vv|-vvv]
@@ -389,7 +389,7 @@ List components installed in a specific IBM Software Hub instance.
 
 ```bash
 cpd-cli manage list-deployed-components \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--scheduler_ns=<project name>] \
   [--all=true|false]
 ```
@@ -420,7 +420,7 @@ Get the web client URL and default `cpadmin` credentials.
 
 ```bash
 cpd-cli manage get-cpd-instance-details \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--get_admin_initial_credentials=true|false]
 ```
 
@@ -458,7 +458,7 @@ Capture operational K8s state for IBM Support troubleshooting. Output saved to `
 
 ```bash
 cpd-cli manage collect-state \
-  [--instance_ns=<project name>]
+  [--cpd_instance_ns=<project name>]
 ```
 
 ### `versioninfo`
@@ -783,7 +783,7 @@ Create proxy configuration resources for IBM Software Hub.
 
 ```bash
 cpd-cli manage create-proxy-config \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--proxy_host=<proxy host>] \
   [--proxy_port=<proxy port>] \
   [--proxy_user=<proxy user>] \
@@ -798,7 +798,7 @@ Apply an HTTP proxy configuration to an IBM Software Hub instance.
 
 ```bash
 cpd-cli manage enable-proxy \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -808,7 +808,7 @@ Disable the HTTP proxy configuration for an IBM Software Hub instance.
 
 ```bash
 cpd-cli manage disable-proxy \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -818,7 +818,7 @@ Get proxy configuration details and associated RSI patches.
 
 ```bash
 cpd-cli manage get-proxy-config \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -828,7 +828,7 @@ Delete RSI patches for HTTP proxy configuration.
 
 ```bash
 cpd-cli manage delete-proxy \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -842,7 +842,7 @@ Create or update an RSI patch (env vars, labels, annotations, pod spec).
 
 ```bash
 cpd-cli manage create-rsi-patch \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   --patch_name=<patch name> \
   [--patch_type=rsi_pod_env_var|rsi_pod_label|rsi_pod_annotation|rsi_pod_spec] \
   [--description=<description>] \
@@ -862,7 +862,7 @@ Apply all active RSI patches in a project.
 
 ```bash
 cpd-cli manage apply-rsi-patches \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -872,7 +872,7 @@ Get info or status about RSI patches in a project.
 
 ```bash
 cpd-cli manage get-rsi-patch-info \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [--all]
 ```
@@ -883,7 +883,7 @@ Extract and display logs from the RSI webhook pod.
 
 ```bash
 cpd-cli manage get-rsi-patch-logs \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [-v|-vv|-vvv]
 ```
@@ -894,7 +894,7 @@ Delete one or all RSI patches in a project.
 
 ```bash
 cpd-cli manage delete-rsi-patch \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--patch_name=<patch name>] \
   [--all]
 ```
@@ -909,7 +909,7 @@ Install the IBM Software Hub configuration admission controller (`cpd-config-ac`
 
 ```bash
 cpd-cli manage install-cpd-config-ac \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--cpd_config_ac_image=<image location>] \
   [--image_pull_secret=<secret name>] \
   [--preview=true|false] \
@@ -922,7 +922,7 @@ Enable the `cpd-config-ac` webhook. Run after `install-cpd-config-ac`.
 
 ```bash
 cpd-cli manage enable-cpd-config-ac \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -932,7 +932,7 @@ Uninstall the admission controller and remove the mutating webhook.
 
 ```bash
 cpd-cli manage uninstall-cpd-config-ac \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -942,7 +942,7 @@ Update the `cpd-platform-ca-certs` secret and inject it into IBM Software Hub po
 
 ```bash
 cpd-cli manage gen-platform-ca-certs \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--apply=true|false] \
   [-v|-vv|-vvv]
 ```
@@ -953,7 +953,7 @@ Remove the `cpd-platform-ca-certs` secret from pods and delete it.
 
 ```bash
 cpd-cli manage delete-platform-ca-certs \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [-v|-vv|-vvv]
 ```
 
@@ -963,7 +963,7 @@ List pods injected with `cpd-platform-ca-certs` and pods where injection failed.
 
 ```bash
 cpd-cli manage list-platform-ca-certs-pods \
-  --instance_ns=<project name>
+  --cpd_instance_ns=<project name>
 ```
 
 ---
@@ -1496,7 +1496,7 @@ Set up the Identity Management service for connecting to an identity provider.
 ```bash
 cpd-cli manage setup-iam-integration \
   --enable=true \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--preview=true|false] \
   [-v|-vv|-vvv]
 ```
@@ -1513,7 +1513,7 @@ Create App Connect resources required by IBM watsonx Orchestrate.
 cpd-cli manage setup-appconnect \
   --release=<version> \
   --components=watsonx_orchestrate \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   [--appconnect_ns=<project name>] \
   [--preview=true|false] \
   [--upgrade=true|false]
@@ -1525,8 +1525,8 @@ Create secrets for Watson services to connect to Multicloud Object Gateway.
 
 ```bash
 cpd-cli manage setup-mcg \
-  --components=<watson_assistant|watson_discovery|watson_speech|watsonx_orchestrate> \
-  --instance_ns=<project name> \
+  --components=<comma-separated list: watson_assistant|watson_discovery|watson_speech|watsonx_orchestrate> \
+  --cpd_instance_ns=<project name> \
   --noobaa_account_secret=<secret name> \
   --noobaa_cert_secret=<secret name> \
   --noobaa_ns=<project name> \
@@ -1563,7 +1563,7 @@ Update configuration data in a ConfigMap. Restarts associated pods.
 
 ```bash
 cpd-cli manage set-config \
-  --instance_ns=<project name> \
+  --cpd_instance_ns=<project name> \
   --configmap_name=<ConfigMap name> \
   [--configmap_spec=<JSON file path>] \
   [--configmap_values=<key:value,...>] \

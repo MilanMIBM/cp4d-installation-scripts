@@ -17,7 +17,7 @@ CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "${CURRENT_DIR}/2.2.1_install_nvidia_node_discovery.sh"
 "${CURRENT_DIR}/2.2.2_install_nvidia_gpu_operator.sh"
 "${CURRENT_DIR}/2.2.3_install_openshift_ai_operator.sh"
-if [[ "${PREP_WXO:-}" == "true" ]]; then
-    "${CURRENT_DIR}/2.2.4_install_multicloud_object_gateway_operator.sh"
-fi
+# 2.2.4 self-gates on the MCG-dependent components in CPD_COMPONENTS, so it is
+# always invoked; PREP_WXO alone would miss discovery/speech/assistant installs.
+"${CURRENT_DIR}/2.2.4_install_multicloud_object_gateway_operator.sh"
 "${CURRENT_DIR}/2.2.5_install_ibm_knative_eventing_operator.sh"

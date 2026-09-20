@@ -84,8 +84,20 @@ export IMAGE_PUSH_PREFIX="${PRIVATE_REGISTRY_LOCATION}"{% endif %}
 # ------------------------------------------------------------------------------
 
 export VERSION="{{ cp4d_version_input.value }}"
-export PATCH_ID="" # "5" - Current patch as of 21.05.2026
-export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}" # you could also specify the architecture like ${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64) if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
+export PATCH_ID="{{ cp4d_patch_input.value }}" # "6" - Current patch as of 17.09.2026
+# Strip surrounding whitespace so a blank/whitespace-only patch counts as unset
+PATCH_ID="${PATCH_ID#"${PATCH_ID%%[![:space:]]*}"}"
+PATCH_ID="${PATCH_ID%"${PATCH_ID##*[![:space:]]}"}"
+export PATCH_ID
+
+# Only append .${PATCH_ID} to the image tag when a patch was actually supplied
+if [[ -n "${PATCH_ID}" ]]; then
+    export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}"
+else
+    export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}"
+fi
+# you could also append the architecture, e.g. :${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64),
+# if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
 # ------------------------------------------------------------------------------

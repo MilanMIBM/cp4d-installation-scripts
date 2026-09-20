@@ -18,7 +18,7 @@ eval "${CPDM_OC_LOGIN}"
 
 
 CPD_INSTANCE_DETAILS="$(cpd-cli manage get-cpd-instance-details \
-  --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
+  --cpd_instance_ns=${PROJECT_CPD_INST_OPERANDS} \
   --get_admin_initial_credentials=true)"
 
 echo "${CPD_INSTANCE_DETAILS}"
@@ -61,5 +61,33 @@ if [[ -z "${CPD_APIKEY}" ]]; then
 fi
 
 echo "export CPD_APIKEY=\"${CPD_APIKEY}\"" >> "${VARS_FILE}"
+
+# --- Optional: IBM License Service credentials ---
+IBM_LICENSING_CREDENTIALS="${IBM_LICENSING_CREDENTIALS:-True}"
+
+if [[ "${IBM_LICENSING_CREDENTIALS:l}" == "true" ]]; then
+  LICENSING_NS="${PROJECT_LICENSE_SERVICE:-ibm-licensing}"
+  echo "[INFO] Retrieving IBM License Service credentials from ${LICENSING_NS}..."
+
+  IBM_LICENSING_TOKEN="$(oc get secret ibm-licensing-token -n "${LICENSING_NS}" \
+    -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || true)"
+
+  IBM_LICENSING_SERVICE_INSTANCE="$(oc get route ibm-licensing-service-instance -n "${LICENSING_NS}" \
+    -o jsonpath='{.spec.host}' 2>/dev/null || true)"
+
+  if [[ -z "${IBM_LICENSING_TOKEN}" ]]; then
+    echo "[WARN] Could not retrieve secret ibm-licensing-token in ${LICENSING_NS}" >&2
+  fi
+  if [[ -z "${IBM_LICENSING_SERVICE_INSTANCE}" ]]; then
+    echo "[WARN] Could not retrieve route ibm-licensing-service-instance in ${LICENSING_NS}" >&2
+  else
+    IBM_LICENSING_SERVICE_INSTANCE="https://${IBM_LICENSING_SERVICE_INSTANCE}"
+  fi
+
+  cat >> "${VARS_FILE}" <<EOF
+export IBM_LICENSING_TOKEN="${IBM_LICENSING_TOKEN}"
+export IBM_LICENSING_SERVICE_INSTANCE="${IBM_LICENSING_SERVICE_INSTANCE}"
+EOF
+fi
 
 echo "[INFO] CPD instance credentials written to ${VARS_FILE##*/}"

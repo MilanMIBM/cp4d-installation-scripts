@@ -32,7 +32,6 @@ cpd-cli manage case-download \
     --release=${VERSION} \
     --scheduler_ns=${PROJECT_SCHEDULING_SERVICE} \
     --operator_ns=${PROJECT_CPD_INST_OPERATORS} \
-    --instance_ns=${PROJECT_CPD_INST_OPERANDS} \
     --cluster_resources=true \
     "${PATCH_FLAG[@]}" \
     --from_oci=${CP_OPEN_DOWNLOAD}
