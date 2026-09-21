@@ -11,5 +11,6 @@ transformers
 pydantic-ai
 jinja2
 mohtml
+pandas
 moterm
 click
