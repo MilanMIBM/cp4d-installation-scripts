@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # source "${SCRIPT_DIR}/../../source_env_setup.sh"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
+source "${_CP4D_REPO_ROOT}/src/scripts/operator_install_helpers.sh"
 
 eval "${OC_LOGIN}"
 
@@ -19,16 +20,6 @@ NAMESPACE="redhat-ods-operator"
 # Service Mesh version to install: 2 or 3
 SERVICE_MESH_VERSION="${SERVICE_MESH_VERSION:-2}"
 TIMEOUT=60
-
-# Skip if RHOAI operator is already installed and both DSCInitialization and DataScienceCluster are Ready
-if oc get csv -n "${NAMESPACE}" --no-headers 2>/dev/null | grep -q "Succeeded"; then
-  DSCI_PHASE=$(oc get dscinitialization default-dsci -o jsonpath='{.status.phase}' 2>/dev/null || true)
-  DSC_PHASE=$(oc get datasciencecluster default-dsc -o jsonpath='{.status.phase}' 2>/dev/null || true)
-  if [[ "${DSCI_PHASE}" == "Ready" && "${DSC_PHASE}" == "Ready" ]]; then
-    echo "[INFO] RHOAI Operator already installed and DataScienceCluster is Ready, skipping."
-    exit 0
-  fi
-fi
 
 # Map CP4D VERSION to the corresponding RHOAI channel.
 # Channel names are OLM channel identifiers (e.g. "2.25"), not CSV version strings.
@@ -45,17 +36,58 @@ esac
 
 echo "[INFO] CP4D VERSION=${VERSION} -> RHOAI channel=${CHANNEL_VERSION}"
 
+# --- Existing-install handling -------------------------------------------------
+# Three outcomes are possible when RHOAI is already present:
+#   1. already on the target channel and healthy  -> nothing to do, skip
+#   2. on a different channel                     -> patch the Subscription channel
+#                                                    and let OLM roll the upgrade
+#   3. present but unhealthy / mid-install        -> fall through and reconcile
+# Scope the CSV lookup to rhods-operator: other operators (DevWorkspace, External
+# Secrets, Pipelines, Web Terminal) also live in this namespace and report
+# Succeeded, so an unscoped grep reports healthy even when RHOAI has failed.
+RHOAI_CSV_PHASE="$(cp4d_csv_phase "${NAMESPACE}" "rhods-operator")"
+
+if [[ "${RHOAI_CSV_PHASE}" == "Succeeded" ]]; then
+  DSCI_PHASE=$(oc get dscinitialization default-dsci -o jsonpath='{.status.phase}' 2>/dev/null || true)
+  # DataScienceCluster reports readiness through its Ready condition, not .status.phase.
+  DSC_READY=$(oc get datasciencecluster default-dsc \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+
+  if [[ "${DSCI_PHASE}" == "Ready" && "${DSC_READY}" == "True" ]]; then
+    # A different channel family (stable -> fast) or major version is not an
+    # in-place upgrade OLM can roll, so the helper fails and we stop.
+    CHANNEL_STATE="$(cp4d_reconcile_subscription_channel \
+      "${NAMESPACE}" "rhods-operator" "${CHANNEL_VERSION}")" || {
+      echo "[ERROR] RHOAI is on a channel CP4D ${VERSION} cannot upgrade in place (target ${CHANNEL_VERSION})." >&2
+      echo "[ERROR] Migrate it manually before re-running." >&2
+      exit 1
+    }
+    case "${CHANNEL_STATE}" in
+      match)
+        echo "[INFO] RHOAI already installed on channel ${CHANNEL_VERSION} and DataScienceCluster is Ready, skipping."
+        exit 0
+        ;;
+      patched)
+        echo "[INFO] RHOAI Subscription channel patched to ${CHANNEL_VERSION}; OLM will roll the upgrade."
+        cp4d_wait_for_csv "${NAMESPACE}" "rhods-operator" "${TIMEOUT}"
+        echo "[INFO] RHOAI upgraded to channel ${CHANNEL_VERSION} successfully."
+        exit 0
+        ;;
+      absent)
+        echo "[INFO] RHOAI CSV is Succeeded but has no Subscription; reconciling."
+        ;;
+    esac
+  fi
+fi
+
 # Create the namespace
 oc new-project "${NAMESPACE}" 2>/dev/null || echo "[INFO] Project ${NAMESPACE} already exists, continuing."
 
-# Create the OperatorGroup
-oc apply -f - <<EOF
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: rhods-operator
-  namespace: ${NAMESPACE}
-EOF
+# Create the OperatorGroup only if the namespace has none. OLM fails any CSV in a
+# namespace holding more than one OperatorGroup (TooManyOperatorGroups), and an
+# existing group may carry a different name (the namespace-default "redhat-ods-operator"),
+# so a blind `oc apply` of a named group would add a second one rather than update it.
+cp4d_ensure_operatorgroup "${NAMESPACE}" "rhods-operator"
 
 # Create the Subscription
 oc apply -f - <<EOF
@@ -91,7 +123,14 @@ else
   exit 1
 fi
 
-if oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; then
+# Match the CSV by its real name prefix. The CSV is named servicemeshoperator.v2.x
+# / servicemeshoperator3.v3.x, and "servicemeshoperator" is a strict prefix of
+# "servicemeshoperator3", so a bare prefix test for v2 also matches an installed
+# v3 and would skip the v2 install. Anchor on the version separator to keep the
+# two apart.
+SM_CSV_PHASE="$(cp4d_csv_phase openshift-operators "${SM_OPERATOR}\\.")"
+
+if [[ "${SM_CSV_PHASE}" == "Succeeded" ]]; then
   echo "[INFO] Service Mesh ${SERVICE_MESH_VERSION} operator already installed, skipping."
 else
   oc apply -f - <<EOF
@@ -108,18 +147,7 @@ spec:
 EOF
 
   echo "Waiting for Service Mesh ${SERVICE_MESH_VERSION} CSV to reach Succeeded (timeout: ${TIMEOUT}s)..."
-  ELAPSED=0
-  until oc get csv -n openshift-operators --no-headers 2>/dev/null | grep -q "^${SM_OPERATOR}.*Succeeded"; do
-    sleep 10
-    ELAPSED=$(( ELAPSED + 10 ))
-    CSV_STATE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null | grep "${SM_OPERATOR}" | awk '{print $1, $NF}' || true)
-    echo "  [${ELAPSED}s] CSV: ${CSV_STATE:-pending}"
-    if (( ELAPSED >= TIMEOUT )); then
-      echo "[ERROR] Service Mesh ${SERVICE_MESH_VERSION} CSV did not reach Succeeded after ${TIMEOUT}s." >&2
-      oc get csv -n openshift-operators | grep "${SM_OPERATOR}" || true
-      exit 1
-    fi
-  done
+  cp4d_wait_for_csv openshift-operators "${SM_OPERATOR}\\." "${TIMEOUT}"
   echo "[INFO] Service Mesh ${SERVICE_MESH_VERSION} operator installed successfully."
 fi
 

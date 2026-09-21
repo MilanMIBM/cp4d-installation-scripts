@@ -12,18 +12,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # source "${SCRIPT_DIR}/../../source_env_setup.sh"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
+source "${_CP4D_REPO_ROOT}/src/scripts/operator_install_helpers.sh"
 
 [[ -n "${PROJECT_IBM_EVENTS}" ]] || { echo "[INFO] PROJECT_IBM_EVENTS is not set - skipping IBM Knative Eventing install."; exit 0; }
 
 eval "${OC_LOGIN}"
 
-# Skip if IBM Events Operator CSV is already Succeeded and KnativeEventing is Ready
-if oc get csv -n "${PROJECT_IBM_EVENTS}" --no-headers 2>/dev/null | grep -q "Succeeded"; then
+# Skip if the IBM Events Operator CSV is already Succeeded and KnativeEventing is
+# Ready. Scope the CSV lookup to ibm-events-operator by name: an unscoped grep
+# for "Succeeded" matches any other operator sharing this namespace and would
+# report a never-installed Events Operator as present.
+EVENTS_PHASE="$(cp4d_csv_phase "${PROJECT_IBM_EVENTS}" "ibm-events-operator")"
+
+if [[ "${EVENTS_PHASE}" == "Succeeded" ]]; then
   KE_READY=$(oc get knativeeventing -n "${PROJECT_IBM_EVENTS}" -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
   if [[ "${KE_READY}" == "True" ]]; then
     echo "[INFO] IBM Knative Eventing already installed and Ready in ${PROJECT_IBM_EVENTS}, skipping."
     exit 0
   fi
+  echo "[INFO] IBM Events Operator is Succeeded but KnativeEventing is not Ready; reconciling."
 fi
 
 # ---

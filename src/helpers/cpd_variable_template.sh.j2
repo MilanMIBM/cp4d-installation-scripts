@@ -90,21 +90,41 @@ PATCH_ID="${PATCH_ID#"${PATCH_ID%%[![:space:]]*}"}"
 PATCH_ID="${PATCH_ID%"${PATCH_ID##*[![:space:]]}"}"
 export PATCH_ID
 
-# Only append .${PATCH_ID} to the image tag when a patch was actually supplied
-if [[ -n "${PATCH_ID}" ]]; then
-    export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}.${PATCH_ID}"
+# Which olm-utils variant to run. Set OLM_UTILS_VARIANT=premium (in cp4d_config/.env,
+# or via src/utils/cpd-cli_toggle_olm_image.sh) to get the Premium image, which is the
+# only one carrying the enable-premium-features and get-premium-feature-status commands.
+# In the standard image those two are stubs that print a notice and exit 1.
+export OLM_UTILS_VARIANT="${OLM_UTILS_VARIANT:-standard}"
+
+if [[ "${OLM_UTILS_VARIANT}" == "premium" ]]; then
+    _OLM_UTILS_REPO="icr.io/cpopen/cpd/olm-utils-premium-v4"
 else
-    export OLM_UTILS_IMAGE="icr.io/cpopen/cpd/olm-utils-v4:${VERSION}"
+    _OLM_UTILS_REPO="icr.io/cpopen/cpd/olm-utils-v4"
 fi
-# you could also append the architecture, e.g. :${VERSION}.${PATCH_ID}.${IMAGE_ARCH} (defaults to amd64),
-# if you are using olm-utils-premium-v4 (not supported for olm-utils-v4)
+
+# Only append .${PATCH_ID} to the image tag when a patch was actually supplied
+_OLM_UTILS_TAG="${VERSION}"
+if [[ -n "${PATCH_ID}" ]]; then
+    _OLM_UTILS_TAG="${VERSION}.${PATCH_ID}"
+fi
+
+# The premium image is published per-architecture, so its tag takes an arch suffix.
+# The standard image does not support that suffix.
+if [[ "${OLM_UTILS_VARIANT}" == "premium" && -n "${IMAGE_ARCH:-}" ]]; then
+    _OLM_UTILS_TAG="${_OLM_UTILS_TAG}.${IMAGE_ARCH}"
+fi
+
+# An OLM_UTILS_IMAGE already exported (e.g. from cp4d_config/.env) wins outright.
+export OLM_UTILS_IMAGE="${OLM_UTILS_IMAGE:-${_OLM_UTILS_REPO}:${_OLM_UTILS_TAG}}"
+unset _OLM_UTILS_REPO _OLM_UTILS_TAG
+
 export CPD_ADMIN_USERNAME="{{ cpd_admin_username_input.value }}"
 
 # ------------------------------------------------------------------------------
 # Components
 # ------------------------------------------------------------------------------
 
-export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform"
+export SOFTWARE_HUB="ibm-licensing,scheduler,cpfs,cpd_platform,ccs"
 export CPD_COMPONENTS="{{ components_to_install_str.split(',') | reject('equalto', 'ibm_wxd_opensearch') | join(',') }}"
 export COMPLETE_COMPONENT_LIST="${SOFTWARE_HUB},${CPD_COMPONENTS}"{% if optional_images_str %}
 export IMAGE_GROUPS="{{ optional_images_str }}"{% endif %}

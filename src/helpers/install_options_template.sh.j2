@@ -115,7 +115,7 @@ non_olm:
 # ............................................................................
 non_olm:
   match360:
-    scaleConfig: small
+    scaleConfig: small_mincpureq
 {% endif %}{% if "informix_cp4d" in components_to_install %}
 ---
 # ............................................................................
@@ -127,7 +127,7 @@ non_olm:
 # ............................................................................
 non_olm:
   ibmInformixCp4dOperator:
-    licenseType: AEE
+    licenseType: EE
 {% endif %}{% if "ws_pipelines" in components_to_install %}
 ---
 # ............................................................................
@@ -259,7 +259,7 @@ override_components_meta:
 # ............................................................................
 non_olm:
   watsonDiscovery:
-    discovery_deployment_type: Production
+    discovery_deployment_type: Starter
 {% endif %}{% if "watson_speech" in components_to_install %}
 ---
 # ............................................................................
@@ -349,24 +349,34 @@ non_olm:
 ---
 # ............................................................................
 # watsonx.data Premium parameters 
-# Valid wxd_premium_enable_models_on values: gpu, cpu
+# Valid wxd_premium_enable_models_on values: gpu
+# component: spark/standard/premium
+#          - spark installs only apache spark features
+#          - standard - allows usage of spark/presto/prestissimo/milvus + datastax/opensearch (both via separate installs)
+#          - premium - requires GPUs and allows all of standard + openrag (separate install)
 # ............................................................................
 non_olm:
   watsonxDataPremium:
     wxd_premium_enable_models_on: gpu
     licenseType: premium
+    component:
+      - standard
 {% endif %}{% if "watsonx_dataintegration" in components_to_install %}
 ---
 # ............................................................................
 # watsonx.data integration parameters
+# enableBatchBulkETL - DataStage Enterprise
+# enableRealtimeStreaming - Streamsets
+# enableDataObservability - DataBand (Data Observability)
+# enableUnstructuredDataIntegration - Unstructured Data Integration
+# enableReplication - Data Replication
 # ............................................................................
-# It can't use 'non_olm:'
-custom_spec:
-  watsonx_dataintegration:
-    enableBatchBulkETL: true # datastage
-    enableRealtimeStreaming: true # streamsets
-    enableDataObservability: true # databand
-    enableUnstructuredDataIntegration: false # udc
+non_olm:
+  watsonxDataintegration:
+    enableBatchBulkETL: true
+    enableRealtimeStreaming: true
+    enableDataObservability: true
+    enableUnstructuredDataIntegration: false
     enableReplication: false
 {% endif %}{% if "watsonx_dataintelligence" in components_to_install %}
 ---
@@ -414,11 +424,13 @@ non_olm:
 # ............................................................................
 # watsonx Orchestrate parameters 
 # InstallMode	Valid values:
+#   size - small/medium
 #   agentic - Install only the agentic AI features. (default)
 #   agentic_assistant - Install the agentic AI features and Assistant Builder features.
 # ............................................................................
 non_olm:
   watsonxOrchestrate:
+    size: small
     installMode: "agentic"
     watsonxAI:
       watsonxaiifm: false # Use remote models, if true requires GPUs for on-prem deployment.

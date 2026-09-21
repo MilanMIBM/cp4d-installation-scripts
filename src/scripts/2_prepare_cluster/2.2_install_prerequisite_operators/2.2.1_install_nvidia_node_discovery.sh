@@ -12,41 +12,55 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # source "${SCRIPT_DIR}/../../source_env_setup.sh"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
+source "${_CP4D_REPO_ROOT}/src/scripts/operator_install_helpers.sh"
 
 eval "${OC_LOGIN}"
 
 NAMESPACE="openshift-nfd"
+CHANNEL="stable"
 TIMEOUT=300
 
-# Skip if NFD operator is already installed and succeeded
-if oc get csv -n "${NAMESPACE}" --no-headers 2>/dev/null | grep -q "Succeeded"; then
-  echo "[INFO] NFD Operator already installed in ${NAMESPACE}, skipping."
-  exit 0
+# --- Existing-install handling -------------------------------------------------
+# Match the CSV by name prefix, not by an unscoped grep for "Succeeded": other
+# operators share this namespace on some clusters and report Succeeded on their
+# own, which would make a never-installed NFD look present and skip the install.
+NFD_PHASE="$(cp4d_csv_phase "${NAMESPACE}" "nfd")"
+
+if [[ "${NFD_PHASE}" == "Succeeded" ]]; then
+  CHANNEL_STATE="$(cp4d_reconcile_subscription_channel "${NAMESPACE}" "nfd" "${CHANNEL}")" || {
+    echo "[ERROR] NFD is on an incompatible channel for target ${CHANNEL}; migrate it manually." >&2
+    exit 1
+  }
+  case "${CHANNEL_STATE}" in
+    match)
+      echo "[INFO] NFD Operator already installed on channel ${CHANNEL} in ${NAMESPACE}, skipping."
+      exit 0
+      ;;
+    patched)
+      echo "[INFO] NFD Subscription channel patched to ${CHANNEL}; waiting for OLM to roll the upgrade."
+      cp4d_wait_for_csv "${NAMESPACE}" "nfd" "${TIMEOUT}"
+      echo "[INFO] NFD Operator upgraded to channel ${CHANNEL} successfully."
+      exit 0
+      ;;
+    absent)
+      # CSV present without a Subscription (manual or orphaned install).
+      # Fall through and reconcile it back under OLM management.
+      echo "[INFO] NFD CSV is Succeeded but has no Subscription; reconciling."
+      ;;
+  esac
 fi
 
-# Create the NFD namespace if it does not already exist
-oc get namespace "${NAMESPACE}" &>/dev/null || oc apply -f - <<EOF
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${NAMESPACE}
-  labels:
-    name: ${NAMESPACE}
-    openshift.io/cluster-monitoring: "true"
-EOF
+cp4d_ensure_namespace "${NAMESPACE}" \
+  "name=${NAMESPACE}" \
+  "openshift.io/cluster-monitoring=true"
 
-# Create the OperatorGroup
-oc apply -f - <<EOF
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  generateName: openshift-nfd-
-  name: openshift-nfd
-  namespace: ${NAMESPACE}
-spec:
-  targetNamespaces:
-  - ${NAMESPACE}
-EOF
+# A second OperatorGroup in this namespace makes OLM fail every CSV in it
+# (TooManyOperatorGroups), so create one only when the namespace has none. A
+# pre-existing group here often carries a different name, and the previous
+# unguarded `oc apply` of a named group would then add a second one rather than
+# update it. (That manifest also carried both generateName and name, where name
+# silently wins - dead config worth dropping either way.)
+cp4d_ensure_operatorgroup "${NAMESPACE}" "openshift-nfd" "${NAMESPACE}"
 
 # Create the Subscription
 oc apply -f - <<EOF
@@ -56,7 +70,7 @@ metadata:
   name: nfd
   namespace: ${NAMESPACE}
 spec:
-  channel: "stable"
+  channel: "${CHANNEL}"
   installPlanApproval: Automatic
   name: nfd
   source: redhat-operators

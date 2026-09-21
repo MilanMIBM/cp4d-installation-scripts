@@ -29,6 +29,10 @@
 # Resolve the directory THIS file lives in (the repo root).
 _BOOTSTRAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
+# Exported so scripts can source repo-relative libraries (e.g. the operator
+# install helpers) without repeating the upward directory walk themselves.
+export _CP4D_REPO_ROOT="${_BOOTSTRAP_DIR}"
+
 # The shared env setup lives under src/scripts/.
 _ENV_SETUP="${_BOOTSTRAP_DIR}/src/scripts/source_env_setup.sh"
 

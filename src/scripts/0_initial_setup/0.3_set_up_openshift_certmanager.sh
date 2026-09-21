@@ -12,38 +12,78 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # source "${SCRIPT_DIR}/../source_env_setup.sh"
 # --- Universal env load: walk up to repo root (env_bootstrap.sh), source it once ---
 _b="${SCRIPT_DIR}"; while [[ "${_b}" != "/" && ! -f "${_b}/env_bootstrap.sh" ]]; do _b="$(dirname "${_b}")"; done; source "${_b}/env_bootstrap.sh"; unset _b
+source "${_CP4D_REPO_ROOT}/src/scripts/operator_install_helpers.sh"
 
 # ---
 eval "${OC_LOGIN}"
 
-oc create namespace openshift-cert-manager-operator --dry-run=client -o yaml | oc apply -f -
+CERT_MANAGER_NS="openshift-cert-manager-operator"
+CERT_MANAGER_CHANNEL="stable-v1"
+CSV_TIMEOUT=600
 
-oc apply -f - <<EOF
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: cert-manager-operator-group
-  namespace: openshift-cert-manager-operator
-spec:
-  targetNamespaces:
-  - openshift-cert-manager-operator
-EOF
+# --- Existing-install handling -------------------------------------------------
+# Skip when the operator is already healthy AND its operand controllers are up,
+# so a re-run neither duplicates OLM objects nor re-waits ten minutes on an
+# install that is already finished. The operand check matters: the CSV can be
+# Succeeded while the cert-manager controllers themselves are absent, and the
+# rest of this script (and everything downstream of it) depends on those pods.
+CM_PHASE="$(cp4d_csv_phase "${CERT_MANAGER_NS}" "cert-manager-operator")"
+
+if [[ "${CM_PHASE}" == "Succeeded" ]]; then
+  CM_OPERAND_READY=true
+  for _dep in cert-manager cert-manager-cainjector cert-manager-webhook; do
+    _avail=$(oc get deployment "${_dep}" -n cert-manager \
+      -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)
+    [[ "${_avail}" == "True" ]] || CM_OPERAND_READY=false
+  done
+  unset _dep _avail
+
+  if [[ "${CM_OPERAND_READY}" == "true" ]]; then
+    CHANNEL_STATE="$(cp4d_reconcile_subscription_channel \
+      "${CERT_MANAGER_NS}" "openshift-cert-manager-operator" "${CERT_MANAGER_CHANNEL}")" || {
+      echo "[ERROR] cert-manager is on an incompatible channel for target ${CERT_MANAGER_CHANNEL}; migrate it manually." >&2
+      exit 1
+    }
+    case "${CHANNEL_STATE}" in
+      match)
+        echo "[INFO] cert-manager already installed on channel ${CERT_MANAGER_CHANNEL} and controllers are Available, skipping."
+        exit 0
+        ;;
+      patched)
+        echo "[INFO] cert-manager Subscription channel patched to ${CERT_MANAGER_CHANNEL}; waiting for OLM to roll the upgrade."
+        cp4d_wait_for_csv "${CERT_MANAGER_NS}" "cert-manager-operator" "${CSV_TIMEOUT}"
+        echo "[INFO] cert-manager upgraded to channel ${CERT_MANAGER_CHANNEL} successfully."
+        exit 0
+        ;;
+      absent)
+        echo "[INFO] cert-manager CSV is Succeeded but has no Subscription; reconciling."
+        ;;
+    esac
+  else
+    echo "[INFO] cert-manager CSV is Succeeded but its controllers are not Available; reconciling."
+  fi
+fi
+
+cp4d_ensure_namespace "${CERT_MANAGER_NS}"
+
+# Only create an OperatorGroup when the namespace has none: a second group in the
+# namespace makes OLM fail every CSV in it (TooManyOperatorGroups), and an
+# existing group often carries a different name, so a named `oc apply` would add
+# rather than update.
+cp4d_ensure_operatorgroup "${CERT_MANAGER_NS}" "cert-manager-operator-group" "${CERT_MANAGER_NS}"
 
 oc apply -f - <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: openshift-cert-manager-operator
-  namespace: openshift-cert-manager-operator
+  namespace: ${CERT_MANAGER_NS}
 spec:
-  channel: stable-v1
+  channel: ${CERT_MANAGER_CHANNEL}
   name: openshift-cert-manager-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
-
-CERT_MANAGER_NS="openshift-cert-manager-operator"
-CSV_TIMEOUT=600
 
 # The CSV is labelled by OLM with operators.coreos.com/<operator>.<namespace>.
 # Poll on that label rather than on the Subscription's .status.installedCSV:
