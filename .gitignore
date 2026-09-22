@@ -271,3 +271,4 @@ wxdata_api/wxdata_add_db_connection_tests.py
 /wxdata_api
 ibm_container_case_overview.py
 ibm-cases-detailed-overview.csv
+src/scripts/4.5_service_instance_setups/4.5_wxdata_provision_presto.sh
