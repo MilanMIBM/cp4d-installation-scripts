@@ -157,7 +157,132 @@ while (( $# > 0 )); do
     esac
 done
 
-[[ -f "${VARS_FILE}" ]] || { echo "[ERROR] ${VARS_FILE} not found." >&2; exit 1; }
+# ------------------------------------------------------------------------------
+# Create the config if it does not exist yet.
+#
+# cp4d_config/ is gitignored, so a fresh clone has no confluent_vars.sh at all.
+# Nothing here needs to be seeded by hand: the backfill sections below add every
+# cluster, platform and sizing variable the install scripts require, so an empty
+# stub is enough to turn the first run into a complete config. Only the shebang
+# and header are written, because the file is sourced, not executed.
+# ------------------------------------------------------------------------------
+if [[ ! -f "${VARS_FILE}" ]]; then
+    if $DRY_RUN; then
+        echo "[INFO] --dry-run: would create ${VARS_FILE} (does not exist)."
+        # Everything downstream greps the file; give it an empty one in the
+        # scratch space so the dry run reports a true "all variables missing".
+        VARS_FILE="$(mktemp)"
+    else
+        mkdir -p "$(dirname "${VARS_FILE}")"
+        cat > "${VARS_FILE}" <<EOF
+#!/bin/zsh
+# ==============================================================================
+# Confluent Platform configuration - created by $(basename $0)
+# on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# ==============================================================================
+# Sourced (never executed) by the confluent_install scripts, which run with
+# ENV_TARGET=confluent so that THIS file is the only config in scope.
+#
+# Re-running the templating script backfills any variable that is missing and
+# leaves every value already present untouched, so edits here survive.
+EOF
+        echo "[INFO] Created ${VARS_FILE##*/} - it did not exist."
+    fi
+fi
+
+# ------------------------------------------------------------------------------
+# Backfill the cluster foundation (OpenShift login, project, storage classes).
+#
+# Every confluent script defaults to ENV_TARGET=confluent, and source_env_setup.sh
+# honours that by sourcing ONLY confluent_vars.sh - cpd_vars.sh is never loaded.
+# So the cluster-level names the scripts rely on (OC_LOGIN, PROJECT_CONFLUENT_SERVER,
+# STG_CLASS_BLOCK, ...) have to live in this file; they cannot be inherited.
+#
+# They must also be written as literals, not as ${OCP_URL}-style references to
+# cpd_vars.sh, for the same reason: nothing else is in scope to resolve them.
+# cpd_vars.sh is therefore read HERE, at template time, purely to seed the values.
+#
+# These are prepended, not appended: CONFLUENT_STORAGE_CLASS="${STG_CLASS_BLOCK}"
+# and CONFLUENT_AUTH_USERNAME="${OCP_USERNAME}" expand when the file is sourced,
+# so their definitions must already be in scope by the time those lines are read.
+#
+# Anything already present is left untouched - a value edited here survives.
+# ------------------------------------------------------------------------------
+CPD_VARS_FILE="${REPO_ROOT}/cp4d_config/cpd_vars.sh"
+
+# Pull a literal value out of cpd_vars.sh without sourcing it (it has side
+# effects: it sources .env and shells out for IMAGE_PULL_CREDENTIALS).
+_seed_from_cpd() {
+    [[ -f "${CPD_VARS_FILE}" ]] || return 0
+    grep -oE "^export $1=\"[^\"]*\"" "${CPD_VARS_FILE}" 2>/dev/null | head -1 | cut -d'"' -f2 || true
+}
+
+_seed_ocp_url="$(_seed_from_cpd OCP_URL)"
+_seed_ocp_user="$(_seed_from_cpd OCP_USERNAME)"
+_seed_ocp_pass="$(_seed_from_cpd OCP_PASSWORD)"
+_seed_stg_block="$(_seed_from_cpd STG_CLASS_BLOCK)"
+_seed_stg_file="$(_seed_from_cpd STG_CLASS_FILE)"
+
+_cluster_defaults=(
+    "OCP_URL|${_seed_ocp_url}|# ---- Cluster -----------------------------------------------------------------
+# The confluent scripts run with ENV_TARGET=confluent, which loads THIS file and
+# nothing else - cpd_vars.sh is not in scope. These are seeded from cpd_vars.sh
+# the first time this script runs and are then owned here; point them at a
+# different cluster freely, re-runs preserve whatever is set."
+    "OCP_USERNAME|${_seed_ocp_user}|"
+    "OCP_PASSWORD|${_seed_ocp_pass}|"
+    'SERVER_ARGUMENTS|--server=${OCP_URL}|'
+    'LOGIN_ARGUMENTS|--username=${OCP_USERNAME} --password=${OCP_PASSWORD}|'
+    'OC_LOGIN|oc login ${SERVER_ARGUMENTS} ${LOGIN_ARGUMENTS}|# Every script runs eval "${OC_LOGIN}" before touching the cluster.'
+    'PROJECT_CONFLUENT_SERVER|confluent|# ---- Projects ----------------------------------------------------------------
+# The project the whole cp-all-in-one stack installs into. The Flink scripts
+# derive their own project from this one (${PROJECT_CONFLUENT_SERVER}-flink).'
+    "STG_CLASS_BLOCK|${_seed_stg_block}|# ---- Storage -----------------------------------------------------------------
+# RWO for the broker PVCs (CONFLUENT_STORAGE_CLASS references this), RWX for the
+# Flink checkpoint PVC (FLINK_STATE_STORAGE_CLASS references this)."
+    "STG_CLASS_FILE|${_seed_stg_file}|"
+)
+
+_cluster_backfill=""
+_cluster_names=()
+for _entry in "${_cluster_defaults[@]}"; do
+    _name="${_entry%%|*}"
+    _rest="${_entry#*|}"
+    _value="${_rest%%|*}"
+    _comment="${_rest#*|}"
+
+    grep -qE "^export ${_name}=" "${VARS_FILE}" && continue
+
+    _cluster_names+=("${_name}")
+    [[ -n "${_comment}" ]] && _cluster_backfill+=$'\n'"${_comment}"
+    _cluster_backfill+=$'\n'"export ${_name}=\"${_value}\""
+done
+
+if [[ -n "${_cluster_backfill}" ]] && ! $DRY_RUN; then
+    _cluster_header="# ------------------------------------------------------------------------------
+# Cluster foundation - added by $(basename $0) on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# ------------------------------------------------------------------------------
+# NOT managed on re-runs - edit these freely, they will be preserved.
+# Must stay above the Confluent settings below, which reference them.${_cluster_backfill}"
+
+    _prepend_file="$(mktemp)"
+    printf '%s\n\n' "${_cluster_header}" > "${_prepend_file}"
+    cat "${VARS_FILE}" >> "${_prepend_file}"
+    mv "${_prepend_file}" "${VARS_FILE}"
+
+    echo "[INFO] Added ${#_cluster_names[@]} missing cluster variable(s) to the top of ${VARS_FILE##*/}:"
+    printf '         %s\n' "${_cluster_names[@]}"
+    for _n in "${_cluster_names[@]}"; do
+        case "${_n}" in
+            OCP_URL|OCP_USERNAME|OCP_PASSWORD|STG_CLASS_BLOCK|STG_CLASS_FILE)
+                [[ -z "$(_seed_from_cpd "${_n}")" ]] && \
+                    echo "[WARN] ${_n} was written empty - cpd_vars.sh had no value to seed it from. Set it in ${VARS_FILE##*/}." ;;
+        esac
+    done
+elif [[ -n "${_cluster_backfill}" ]]; then
+    echo "[INFO] --dry-run: would add ${#_cluster_names[@]} missing cluster variable(s) to the top:"
+    printf '         %s\n' "${_cluster_names[@]}"
+fi
 
 # ------------------------------------------------------------------------------
 # Backfill the non-sizing Confluent Platform settings.
@@ -229,14 +354,14 @@ _platform_defaults=(
 # it is then reused on every later run, so redeploys keep the same credentials.'
     'CONFLUENT_AUTH_PASSWORD||'
     'CONFLUENT_AUTH_PASSWORD_LENGTH|24|'
-    'CONFLUENT_SASL_ENABLED|false|# ---- Kafka client authentication (SASL/SCRAM) --------------------------------
+    'CONFLUENT_SASL_ENABLED|true|# ---- Kafka client authentication (SASL/SCRAM) --------------------------------
 # Independent of the web-UI auth above: this secures the Kafka wire protocol.
 # Enabling it makes the brokers reject unauthenticated clients.'
     'CONFLUENT_SASL_MECHANISM|SCRAM-SHA-512|'
     'CONFLUENT_SASL_ADMIN_USER|confluent-admin|'
     'CONFLUENT_SASL_CLIENTS|app-client|# Comma-separated. One SCRAM credential is minted per name.'
     'CONFLUENT_SASL_SECRET|confluent-sasl|'
-    'CONFLUENT_MDS_ENABLED|false|# ---- Metadata Service (MDS) / RBAC -------------------------------------------
+    'CONFLUENT_MDS_ENABLED|true|# ---- Metadata Service (MDS) / RBAC -------------------------------------------
 # MDS is embedded in the cp-server broker image, so enabling it adds no new
 # Confluent component - it opens an HTTP listener on the brokers and turns on
 # the RBAC authorizer. This is what makes \"confluent login --url\" work.
@@ -527,14 +652,33 @@ drop_headers = ("# ---- Cluster sizing", "# ---- Storage",
                 "# ---- Resource requests / limits")
 
 lines = text.split("\n")
+
+# A header alone must never anchor the insert. "# ---- Storage" also introduces
+# the cluster foundation block at the top of the file, and anchoring on it put
+# the sizing block ABOVE the STG_CLASS_BLOCK definition that
+# CONFLUENT_STORAGE_CLASS="${STG_CLASS_BLOCK}" expands from - which silently
+# resolves to an empty storage class when the file is sourced. Only a managed
+# variable marks the position; a header is dropped solely when one follows it.
+def introduces_managed_var(start):
+    for line in lines[start + 1:]:
+        if var_re.match(line):
+            return True
+        # A blank line or a new section ends the header's reach.
+        if not line.strip() or line.startswith("# ----"):
+            return False
+        if line.startswith("#"):
+            continue
+        return False
+    return False
+
 out, insert_at, dropping_comment = [], None, False
-for line in lines:
+for idx, line in enumerate(lines):
     if var_re.match(line):
         if insert_at is None:
             insert_at = len(out)
         dropping_comment = False
         continue
-    if line.startswith(drop_headers):
+    if line.startswith(drop_headers) and introduces_managed_var(idx):
         if insert_at is None:
             insert_at = len(out)
         dropping_comment = True

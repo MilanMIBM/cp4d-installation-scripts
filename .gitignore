@@ -278,3 +278,7 @@ mongodb_parsed_conn_credentials/a4c35f59-00d1-4fa3-aefa-0c11bebbd6c3.pem
 /src/scripts/confluent_install/flink_install/flink_vars
 /.claude
 /wxdata_api/
+/old_configs/spss_cpd_20.09.2026
+ibm-cases-detailed-overview.csv
+src/scripts/4.5_service_instance_setups/4.5_wxdata_provision_presto.sh
+ibm_container_case_overview.py
