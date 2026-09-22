@@ -401,11 +401,29 @@ if [[ "${CONFLUENT_MDS_ENABLED}" == "true" ]]; then
         echo "[ERROR] Run x.2_confluent_add_sasl.sh first." >&2
         exit 1
     fi
+    # The token keypair is owned by x.4_confluent_add_mds.sh, which generates it
+    # and then re-invokes this installer to reshape the brokers. On the deferred
+    # second pass nobody has run it yet - this pass turned MDS back on itself -
+    # so the secret is legitimately absent and erroring out would strand the
+    # install one step short of the MDS it was asked for. Hand off to the script
+    # that owns the keypair instead, the same way external access does below.
     if ! oc get secret "${CONFLUENT_MDS_SECRET}" -n "${NS}" &>/dev/null; then
+        _mds_script="${SCRIPT_DIR}/x.4_confluent_add_mds.sh"
+        if [[ "${_CONFLUENT_MDS_PENDING:-false}" != "true" && -x "${_mds_script}" ]]; then
+            echo "[INFO] MDS requested but no token keypair yet; handing off to ${_mds_script##*/}."
+            # The flag stops the hand-off recursing: that script re-invokes this
+            # installer, and by then the secret exists so this branch is not
+            # reached - but if its keypair step ever fails we must not loop.
+            export _CONFLUENT_MDS_PENDING="true"
+            # --skip-user-store is NOT passed: the user store is part of what
+            # that script sets up, and this pass has not created one either.
+            exec "${_mds_script}" --yes --no-status
+        fi
         echo "[ERROR] CONFLUENT_MDS_ENABLED=true but secret '${CONFLUENT_MDS_SECRET}' is missing." >&2
         echo "[ERROR] Run x.4_confluent_add_mds.sh, which generates the token keypair." >&2
         exit 1
     fi
+    unset _CONFLUENT_MDS_PENDING
 
     # The user store. LDAP is a direct bind against the bundled OpenLDAP; OAUTH
     # validates JWTs against a JWKS endpoint and needs no directory at all.
@@ -675,12 +693,14 @@ apply_component() {
     # inspection honest.
     cat > "${file}"
 
-    # On the deferred first pass only the brokers are deployed. Every component
-    # reaching this helper is a Kafka client whose SASL settings are still blank
-    # (the listeners have not flipped yet), so applying it now would start it on
+    # On the deferred first pass only the brokers are deployed. Every other
+    # component is a Kafka client whose SASL settings are still blank (the
+    # listeners have not flipped yet), so applying it now would start it on
     # a config the second pass immediately replaces - rolling each workload
-    # twice for no benefit. Brokers bypass this helper, so they still deploy.
-    if [[ "${_brokers_only:-false}" == "true" ]]; then
+    # twice for no benefit. The brokers themselves are the point of this pass,
+    # so they are exempt: skipping them left wait_rollout below waiting on a
+    # statefulset that was never created.
+    if [[ "${_brokers_only:-false}" == "true" && "${name}" != "broker" ]]; then
         echo "[INFO] Skipping ${name} on this pass (brokers first; deployed once SASL is live)."
         return 0
     fi
