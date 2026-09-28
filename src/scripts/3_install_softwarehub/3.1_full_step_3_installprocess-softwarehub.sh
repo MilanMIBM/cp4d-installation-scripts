@@ -28,3 +28,13 @@ run_step "${CURRENT_DIR}/3.3_install_ibm_softwarehub.sh"
 run_step "${CURRENT_DIR}/3.3.1_get_instance_creds.sh"
 run_step "${CURRENT_DIR}/3.3.2_softwarehub_admission_controller.sh"
 run_step "${CURRENT_DIR}/3.4_apply_entitlements.sh"
+
+# Optional: create ccs-cr only when ccs is listed as a component. Exact match on
+# the comma-separated list, so e.g. "ccs_foo" does not trigger it.
+_components=",${SOFTWARE_HUB:-},${CPD_COMPONENTS:-},"
+if [[ "${_components// /}" == *",ccs,"* ]]; then
+    run_step "${CURRENT_DIR}/3.5_create_ccs_cr_if_missing.sh"
+else
+    echo "[INFO] ccs not in SOFTWARE_HUB or CPD_COMPONENTS; skipping 3.5_create_ccs_cr_if_missing.sh."
+fi
+unset _components
