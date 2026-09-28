@@ -2,7 +2,7 @@ apiVersion: ccs.cpd.ibm.com/v1beta1
 kind: CCS
 metadata:
   name: ccs-cr
-  namespace:  cpd-operands #${PROJECT_CPD_INST_OPERANDS}
+  namespace: cpd-operands #${PROJECT_CPD_INST_OPERANDS}
 spec:
   license:
     accept: true
@@ -11,7 +11,7 @@ spec:
   nonOlmDeploy: true
   scaleConfig: small
   imagePullSecret: pull-secret #${IMAGE_PULL_SECRET}
-  docker_registry_prefix: icr.io #${IMAGE_PULL_PREFIX}
-  version: 13.0.0
+  docker_registry_prefix: cp.icr.io #${IMAGE_PULL_PREFIX}
+  version: 13.0.6
   fileStorageClass: ocs-storagecluster-cephfs #${STG_CLASS_FILE}
   storageClass: ocs-storagecluster-cephfs #${STG_CLASS_FILE}
