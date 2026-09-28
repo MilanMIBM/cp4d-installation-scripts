@@ -275,3 +275,10 @@ src/scripts/4.5_service_instance_setups/4.5_provision_openpages.sh
 /src/utils/terraform
 /src/scripts/confluent_install
 /.claude
+/old_configs
+/service_instances
+wxdata_api/duckdb_inmemory.wal
+wxdata_api/duckdb_inmemory
+ibm-cases-detailed-overview.csv
+ibm_container_case_overview.py
+src/scripts/4.5_service_instance_setups/4.5_wxdata_provision_presto.sh
