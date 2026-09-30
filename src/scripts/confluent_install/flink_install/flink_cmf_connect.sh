@@ -106,10 +106,16 @@ cmf_connect() {
         return 1
     fi
 
-    # 2. The route, when there is one.
-    local host
+    # 2. The route, when there is one and it is not behind the OpenShift login.
+    # x.2_flink_add_auth_openshift.sh repoints the route at an oauth-proxy,
+    # which the confluent CLI cannot authenticate to - and which answers the
+    # reachability check with a 302 that curl -f counts as success.
+    local host route_svc
     host="$(oc get route cmf -n "${ns}" -o jsonpath='{.spec.host}' 2>/dev/null || true)"
-    if [[ -n "${host}" ]]; then
+    route_svc="$(oc get route cmf -n "${ns}" -o jsonpath='{.spec.to.name}' 2>/dev/null || true)"
+    if [[ -n "${host}" && "${route_svc}" != "${FLINK_CMF_SERVICE}" ]]; then
+        echo "[INFO] Route 'cmf' is behind the OpenShift login - port-forwarding instead."
+    elif [[ -n "${host}" ]]; then
         if _cmf_reachable "https://${host}"; then
             CMF_URL="https://${host}"
             echo "[INFO] Using CMF at ${CMF_URL} (route)."

@@ -164,6 +164,11 @@ fi
 # ==============================================================================
 # 2. Helm releases
 # ==============================================================================
+# The grant x.2_flink_add_auth_openshift.sh makes is cluster-scoped, so deleting
+# the project would leave it behind.
+run oc adm policy remove-cluster-role-from-user system:auth-delegator \
+    -z confluent-manager-for-apache-flink -n "${NS}"
+
 if command -v helm &>/dev/null; then
     for _rel in "${FLINK_CMF_RELEASE_NAME}" "${FLINK_OPERATOR_RELEASE_NAME}"; do
         if helm status "${_rel}" -n "${NS}" &>/dev/null; then
@@ -224,7 +229,7 @@ else
     echo "[INFO] Deleting Flink resources from '${NS}' (project preserved)..."
     run oc delete deployment,service,route,configmap -n "${NS}" \
         -l app.kubernetes.io/part-of=confluent-flink --ignore-not-found
-    run oc delete secret "${FLINK_LICENSE_SECRET}" "${FLINK_S3_SECRET}" -n "${NS}" --ignore-not-found
+    run oc delete secret "${FLINK_LICENSE_SECRET}" "${FLINK_S3_SECRET}" "${FLINK_AUTH_SECRET:-cmf-oauth}" -n "${NS}" --ignore-not-found
 
     if [[ "${KEEP_DATA}" != "true" ]]; then
         echo "[INFO] Deleting PVCs..."
