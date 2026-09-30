@@ -138,7 +138,11 @@ echo "-- CMF endpoint ----------------------------------------------------------
 _route="$(oc get route cmf -n "${NS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)"
 if [[ -n "${_route}" ]]; then
     printf '  %-42s %s\n' "route" "https://${_route}"
-    printf '  %-42s %s\n' "" "UNAUTHENTICATED - anyone who can reach it controls Flink"
+    if [[ "$(oc get route cmf -n "${NS}" -o jsonpath='{.spec.to.name}' 2>/dev/null || true)" != "${FLINK_CMF_SERVICE}" ]]; then
+        printf '  %-42s %s\n' "" "OpenShift login (oauth-proxy)"
+    else
+        printf '  %-42s %s\n' "" "UNAUTHENTICATED - anyone who can reach it controls Flink"
+    fi
 else
     printf '  %-42s %s\n' "route" "(none - use oc port-forward)"
 fi

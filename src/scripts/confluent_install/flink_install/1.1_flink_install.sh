@@ -249,7 +249,16 @@ fi
 # installs it has NO authentication: anyone who can reach the route can create,
 # modify and delete Flink jobs. In-cluster it is reachable only from this
 # namespace; a route puts it on the public ingress.
-if [[ "${FLINK_CREATE_ROUTES}" == "true" && "${DRY_RUN}" != "true" ]]; then
+#
+# Once x.2_flink_add_auth_openshift.sh has put the route behind the OpenShift
+# login, that script owns it: applying the plain route below would point it
+# straight back at CMF, and the helm upgrade above may have dropped the sidecar.
+# Its cookie secret is the marker that auth is enabled.
+if [[ "${DRY_RUN}" != "true" ]] \
+        && oc get secret "${FLINK_AUTH_SECRET:-cmf-oauth}" -n "${NS}" &>/dev/null; then
+    echo "[INFO] OpenShift auth is enabled for the CMF route - re-applying it."
+    "${SCRIPT_DIR}/x.2_flink_add_auth_openshift.sh" --no-status
+elif [[ "${FLINK_CREATE_ROUTES}" == "true" && "${DRY_RUN}" != "true" ]]; then
     _host_line=""
     [[ -n "${CONFLUENT_ROUTE_DOMAIN:-}" ]] && _host_line="  host: cmf-${NS}.${CONFLUENT_ROUTE_DOMAIN}"
     oc apply -f - <<EOF
@@ -272,9 +281,10 @@ ${_host_line}
     insecureEdgeTerminationPolicy: Redirect
 EOF
     echo "[WARN] Route 'cmf' created. The CMF REST API is UNAUTHENTICATED - anyone"
-    echo "[WARN] who can reach this URL can create and delete Flink jobs. Put an"
-    echo "[WARN] oauth-proxy in front of it, or set FLINK_CREATE_ROUTES=false and"
-    echo "[WARN] use the port-forward the x.* scripts open automatically."
+    echo "[WARN] who can reach this URL can create and delete Flink jobs. Run"
+    echo "[WARN] ./x.2_flink_add_auth_openshift.sh to put it behind the OpenShift"
+    echo "[WARN] login, or set FLINK_CREATE_ROUTES=false and use the port-forward"
+    echo "[WARN] the x.* scripts open automatically."
 elif [[ "${FLINK_CREATE_ROUTES}" != "true" ]]; then
     echo "[INFO] FLINK_CREATE_ROUTES=false - CMF stays in-cluster (the x.* scripts"
     echo "[INFO] port-forward to it on demand)."
